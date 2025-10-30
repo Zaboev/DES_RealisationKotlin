@@ -3,8 +3,16 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.io.File
 import kotlinx.coroutines.CompletableDeferred
+import java.io.FileInputStream
+import java.io.FileOutputStream
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.contracts.Returns
+import java.util.concurrent.Executors
+import java.io.RandomAccessFile
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.nio.channels.FileChannel
+import java.security.SecureRandom
 
 
 enum class Endian {
@@ -107,6 +115,13 @@ enum class EncryptionMode {
 
 } //to CypherAlgorithm
 
+enum class CipherOrDecipher {
+
+    Decryption,
+    Encryption
+
+}
+
 interface IRoundKeysGenerator {
 
     suspend fun rKeysGenerator(entryKey: ByteArray): ArrayList<ByteArray>
@@ -129,27 +144,347 @@ interface IEncrDecr {
 
 } //Done
 
-class contextCypherAlgorithm(
+class ContextCypherAlgorithm(
 
     private val encryptionKey: ByteArray,
     private val mode: EncryptionMode,
     private val paddingType: Padding,
-    private val vectorInit: ByteArray? = null,
     private val endian: Endian,
     private val indexBase: IndexBase,
-    vararg extraParams: Any // Исправить
+    private var randomDelta: ByteArray = byteArrayOf(0,0,0,0,0,0,0,0),
+    private var vectorInit: ByteArray = byteArrayOf(0,0,0,0,0,0,0,0)
 
 ) {
 
-    when (mode) {
+    fun cipherStart(input: String, output: String, cipherOrDecipher: CipherOrDecipher, threadCount: Int) = runBlocking {
 
-        EncryptionMode.ECB -> return
-        EncryptionMode.CBC -> return
-        EncryptionMode.PCBC -> return
-        EncryptionMode.CFB -> return
-        EncryptionMode.OFB -> return
-        EncryptionMode.CTR -> return
-        EncryptionMode.RandomDelta -> return
+        val dispatcher = Executors.newFixedThreadPool(threadCount).asCoroutineDispatcher()
+
+        val _input = File(input)
+        val _output = File(output)
+
+        fileProcess(_input, _output, dispatcher, cipherOrDecipher)
+
+        dispatcher.close()
+
+    }
+
+    private var countForCTR_RandomDelta: Long = 0
+
+    private suspend fun fileProcess (
+        input: File,
+        output: File,
+        dispatcher: CoroutineDispatcher,
+        cipherOrDecipher: CipherOrDecipher
+    ) = withContext(dispatcher) {
+
+        val buffer = ByteArray(8)
+
+        RandomAccessFile(input, "r").use { inFile ->
+
+            RandomAccessFile(output, "rw").use { outFile ->
+
+                val inChannel = inFile.channel
+                val outChannel = outFile.channel
+
+                var position = 0L
+
+                if ((mode == EncryptionMode.CBC) || (mode == EncryptionMode.PCBC) || (mode == EncryptionMode.CFB) || (mode == EncryptionMode.OFB)) {
+
+                    while (true) {
+                        val bytesRead = inChannel.read(ByteBuffer.wrap(buffer))
+                        if (bytesRead == -1) break
+
+                        var chunk = buffer.copyOf(bytesRead)
+                        val processed = enDeCryption(chunk, cipherOrDecipher)
+                        outChannel.write(ByteBuffer.wrap(processed))
+                        position += bytesRead
+
+                    }
+
+                }
+                else {
+
+                    val jobs = mutableListOf<Deferred<Pair<Long, ByteArray>>>()
+
+                    while (true) {
+
+                        val bytesRead = inChannel.read(ByteBuffer.wrap(buffer))
+                        if (bytesRead == -1) break
+
+                        var chunk = buffer.copyOf(bytesRead)
+                        val pos = position
+
+                        if (bytesRead < 8) chunk = paddingAdd(chunk)
+
+                        val job = async(dispatcher) {
+
+                            val processed = enDeCryption(chunk, cipherOrDecipher, countForCTR_RandomDelta, randomDelta)
+                            pos to processed
+
+                        }
+
+                        countForCTR_RandomDelta++
+                        jobs.add(job)
+                        position += bytesRead
+
+                    }
+
+                    val results = jobs.awaitAll().sortedBy { it.first }
+
+                    for ((_, bytes) in results) {
+
+                        outChannel.write(ByteBuffer.wrap(bytes))
+
+                    }
+
+                }
+
+            }
+
+        }
+
+    }
+
+    private fun paddingAdd(block: ByteArray): ByteArray {
+
+        val paddingLength = 8 - (block.size.takeIf { it != 0 } ?: 8)
+
+        return when (paddingType) {
+
+            Padding.Zeros -> block + ByteArray(paddingLength) { 0 }
+            Padding.ANSI_X923 -> block + ByteArray(paddingLength - 1) { 0 } + byteArrayOf(paddingLength.toByte())
+            Padding.PKCS7 -> block + ByteArray(paddingLength) { paddingLength.toByte() }
+            Padding.ISO10126 -> {
+
+                val random = SecureRandom()
+                val randomBytes = ByteArray(paddingLength - 1).also { random.nextBytes(it) }
+                block + randomBytes + byteArrayOf(paddingLength.toByte())
+
+            }
+
+        }
+
+    }
+
+    private fun paddingRemove(block: ByteArray): ByteArray {
+
+        return when (paddingType) {
+
+            Padding.Zeros -> block.dropLastWhile { it == 0.toByte() }.toByteArray()
+            else -> {
+
+                val paddingLength = block.last().toInt()
+                block.dropLast(paddingLength).toByteArray()
+
+            }
+
+        }
+
+    }
+
+    private fun objectCreating(): FeistelStructure {
+
+        val roundKeys = RoundKeysGenerator(endian, indexBase)
+        val roundFunction = RoundFunction(endian, indexBase)
+        return FeistelStructure(roundFunction, roundKeys, endian, indexBase, encryptionKey)
+
+    }
+
+    private var cBlock = vectorInit
+    private var pBlock = ByteArray(8)
+    private var isFirst = true
+    private var shiftRegister = vectorInit
+    private var stream = vectorInit
+
+    private suspend fun enDeCryption(
+        block: ByteArray,
+        cipherOrDecipher: CipherOrDecipher,
+        counterForCTR_RandomDelta: Long = 0,
+        randomDelta: ByteArray = ByteArray(8)
+    ): ByteArray {
+
+        val structureDeFeistel = objectCreating()
+
+        return when (mode) {
+
+            EncryptionMode.ECB -> {
+
+                if (cipherOrDecipher == CipherOrDecipher.Encryption) structureDeFeistel.encryptionAlgorithm(block)
+                else structureDeFeistel.decryptionAlgorithm(block)
+
+            }
+
+            EncryptionMode.CBC -> {
+
+                if (cipherOrDecipher == CipherOrDecipher.Encryption) {
+
+                    val newBlock = ByteArray(8) { i ->
+
+                        (block[i].toInt() xor cBlock[i].toInt()).toByte()
+
+                    }
+
+                    cBlock = structureDeFeistel.encryptionAlgorithm(newBlock)
+                    cBlock
+
+                }
+                else {
+
+                    val outputBlock = structureDeFeistel.decryptionAlgorithm(block)
+
+                    val result = ByteArray(8) { i -> (outputBlock[i].toInt() xor cBlock[i].toInt()).toByte() }
+
+                    cBlock = outputBlock
+
+                    result
+
+                }
+
+            }
+
+            EncryptionMode.PCBC -> {
+
+                if (cipherOrDecipher == CipherOrDecipher.Encryption) {
+
+                    var newBlock = ByteArray(8)
+
+                    if (isFirst) {
+
+                        pBlock = block
+
+                        newBlock = ByteArray(8) { i ->
+
+                            (block[i].toInt() xor cBlock[i].toInt()).toByte()
+
+                        }
+
+                        isFirst = false
+
+                    }
+                    else {
+
+                        newBlock = ByteArray(8) { i ->
+
+                            (block[i].toInt() xor cBlock[i].toInt() xor pBlock[i].toInt()).toByte()
+
+                        }
+
+                        pBlock = block
+
+                    }
+
+                    cBlock = structureDeFeistel.encryptionAlgorithm(newBlock)
+                    cBlock
+
+                }
+                else {
+
+                    var newBlock = structureDeFeistel.decryptionAlgorithm(block)
+
+                    if (isFirst) {
+
+                        pBlock = ByteArray(8) { i -> (cBlock[i].toInt() xor newBlock[i].toInt()).toByte() }
+                        cBlock = block
+
+                    }
+                    else {
+
+                        pBlock = ByteArray(8) { i-> (newBlock[i].toInt() xor cBlock[i].toInt() xor pBlock[i].toInt()).toByte() }
+                        cBlock = block
+
+                    }
+
+                    pBlock
+                }
+
+            }
+
+            EncryptionMode.CFB -> {
+
+                var enShiftRegister = ByteArray(8)
+                var result = ByteArray(8)
+
+                if (cipherOrDecipher == CipherOrDecipher.Encryption) {
+
+                    enShiftRegister = structureDeFeistel.encryptionAlgorithm(shiftRegister)
+
+                    shiftRegister = ByteArray(8) { i ->
+
+                        (block[i].toInt() xor enShiftRegister[i].toInt()).toByte()
+
+                    }
+
+                    result = shiftRegister
+
+                }
+                else {
+
+                    enShiftRegister = structureDeFeistel.encryptionAlgorithm(shiftRegister)
+
+                    result = ByteArray(8) { i ->
+
+                        (block[i].toInt() xor enShiftRegister[i].toInt()).toByte()
+
+                    }
+
+                    shiftRegister = block
+
+                }
+
+                result
+            }
+
+            EncryptionMode.OFB -> {
+
+                stream = structureDeFeistel.encryptionAlgorithm(stream)
+                ByteArray(8) { i ->
+
+                    (block[i].toInt() xor stream[i].toInt()).toByte()
+
+                }
+
+            }
+
+            EncryptionMode.CTR -> {
+
+                val counterBlock = shiftRegister.copyOf()
+
+                val counterBytes = ByteBuffer
+                    .allocate(8)
+                    .order(if (endian == Endian.BIG_ENDIAN) ByteOrder.BIG_ENDIAN else ByteOrder.LITTLE_ENDIAN)
+                    .putLong(counterForCTR_RandomDelta)
+                    .array()
+
+                for (i in 0 until 8) counterBlock[i] = (counterBlock[i].toInt() xor counterBytes[i].toInt()).toByte()
+
+                val outputBlock = structureDeFeistel.encryptionAlgorithm(counterBlock)
+
+                ByteArray(8) { i -> (block[i].toInt() xor outputBlock[i].toInt()).toByte()}
+
+            }
+
+            EncryptionMode.RandomDelta -> {
+
+                val localIV = shiftRegister.copyOf()
+
+                val delta = ByteArray(8)
+                val counterBytes = ByteBuffer
+                    .allocate(8)
+                    .order(if (endian == Endian.BIG_ENDIAN) ByteOrder.BIG_ENDIAN else ByteOrder.LITTLE_ENDIAN)
+                    .putLong(counterForCTR_RandomDelta)
+                    .array()
+
+                val RD = randomDelta
+
+                for (i in 1 until 8) delta[i] = (localIV[i].toInt() xor (RD[i].toInt() * counterBytes[i].toInt())).toByte()
+
+                val outputBlock = structureDeFeistel.encryptionAlgorithm(delta)
+
+                ByteArray(8) { i -> (block[i].toInt() xor outputBlock[i].toInt()).toByte() }
+
+            }
+        }
 
     }
 
@@ -453,7 +788,7 @@ class FeistelStructure(
             val leftBytes = cipheredBlock.copyOfRange(0, 4)
             val rightBytes = cipheredBlock.copyOfRange(4, 8)
 
-            val funFBlock = objectRF.encryptionTransformation(rightBytes, roundKeys[round])
+            val funFBlock = objectRF.encryptionTransformation(rightBytes, roundKeys[round - 1])
 
             val xored = xor(leftBytes, funFBlock)
 
@@ -477,7 +812,7 @@ class FeistelStructure(
             val leftBytes = cipheredBlock.copyOfRange(0, 4)
             val rightBytes = cipheredBlock.copyOfRange(4, 8)
 
-            val funFBlock = objectRF.encryptionTransformation(rightBytes, roundKeys[round])
+            val funFBlock = objectRF.encryptionTransformation(rightBytes, roundKeys[round - 1])
 
             val xored = xor(leftBytes, funFBlock)
 
@@ -494,5 +829,30 @@ class FeistelStructure(
         roundKeys = keyGenerator.rKeysGenerator(entryKey)
 
     }
+
+}
+
+fun main() {
+
+    val obj = ContextCypherAlgorithm(
+        byteArrayOf(1,2,3,4,5,6,7,8),
+        EncryptionMode.ECB,
+        Padding.Zeros,
+        Endian.LTL_ENDIAN,
+        IndexBase.ONE_INDEX )
+
+    obj.cipherStart(
+        "C:\\Users\\Zaboev\\Desktop\\ExamplesForDES\\outText.txt",
+        "C:\\Users\\Zaboev\\Desktop\\ExamplesForDES\\decryptionText.txt",
+        CipherOrDecipher.Decryption,
+        5)
+
+    // private val encryptionKey: ByteArray,
+    //    private val mode: EncryptionMode,
+    //    private val paddingType: Padding,
+    //    private val vectorInit: ByteArray,
+    //    private val endian: Endian,
+    //    private val indexBase: IndexBase,
+    //    private val randomDelta: ByteArray
 
 }
