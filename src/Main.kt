@@ -1,17 +1,9 @@
 import kotlinx.coroutines.*
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import java.io.File
-import kotlinx.coroutines.CompletableDeferred
-import java.io.FileInputStream
-import java.io.FileOutputStream
-import java.util.concurrent.atomic.AtomicInteger
-import kotlin.contracts.Returns
 import java.util.concurrent.Executors
 import java.io.RandomAccessFile
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import java.nio.channels.FileChannel
 import java.security.SecureRandom
 
 
@@ -56,7 +48,7 @@ suspend fun bitSwap(block: ByteArray, ruleSwap: IntArray, endian: Endian, indexB
 
         }
 
-        return if ((b and mask) != 1) 1 else 0
+        return if ((b and mask) != 0) 1 else 0
 
     }
 
@@ -156,6 +148,12 @@ class ContextCypherAlgorithm(
 
 ) {
 
+    private var cBlock = vectorInit
+    private var pBlock = ByteArray(8)
+    private var isFirst = true
+    private var shiftRegister = vectorInit
+    private var stream = vectorInit
+
     fun cipherStart(input: String, output: String, cipherOrDecipher: CipherOrDecipher, threadCount: Int) = runBlocking {
 
         val dispatcher = Executors.newFixedThreadPool(threadCount).asCoroutineDispatcher()
@@ -178,7 +176,19 @@ class ContextCypherAlgorithm(
         cipherOrDecipher: CipherOrDecipher
     ) = withContext(dispatcher) {
 
+        isFirst = true
+        cBlock = vectorInit.copyOf()
+        pBlock = ByteArray(8)
+        shiftRegister = vectorInit.copyOf()
+        stream = vectorInit.copyOf()
+
         val buffer = ByteArray(8)
+
+        fun isStreamMode() =
+            mode == EncryptionMode.CFB ||
+                    mode == EncryptionMode.OFB ||
+                    mode == EncryptionMode.CTR ||
+                    mode == EncryptionMode.RandomDelta
 
         RandomAccessFile(input, "r").use { inFile ->
 
@@ -189,15 +199,39 @@ class ContextCypherAlgorithm(
 
                 var position = 0L
 
-                if ((mode == EncryptionMode.CBC) || (mode == EncryptionMode.PCBC) || (mode == EncryptionMode.CFB) || (mode == EncryptionMode.OFB)) {
+                if (mode != EncryptionMode.ECB) {
 
                     while (true) {
+
                         val bytesRead = inChannel.read(ByteBuffer.wrap(buffer))
                         if (bytesRead == -1) break
 
                         var chunk = buffer.copyOf(bytesRead)
-                        val processed = enDeCryption(chunk, cipherOrDecipher)
-                        outChannel.write(ByteBuffer.wrap(processed))
+
+                        if (bytesRead < 8 && (mode == EncryptionMode.CBC || mode == EncryptionMode.PCBC)) {
+
+                            chunk = paddingAdd(chunk)
+                            val processed = enDeCryption(chunk, cipherOrDecipher)
+                            outChannel.write(ByteBuffer.wrap(processed))
+
+                        }
+
+                        else {
+
+                            if (bytesRead < 8 && !isStreamMode()) chunk += ByteArray(8 - bytesRead) { 0 }
+                            val processed = enDeCryption(chunk, cipherOrDecipher)
+
+                            if (isStreamMode()) {
+                                println("WRITE stream block: bytesRead=$bytesRead processed.size=${processed.size}")
+                                outChannel.write(ByteBuffer.wrap(processed, 0, bytesRead))
+                            }
+                            else {
+                                println("WRITE stream block: bytesRead=$bytesRead processed.size=${processed.size}")
+                                outChannel.write(ByteBuffer.wrap(processed))
+                            }
+
+                        }
+
                         position += bytesRead
 
                     }
@@ -205,7 +239,7 @@ class ContextCypherAlgorithm(
                 }
                 else {
 
-                    val jobs = mutableListOf<Deferred<Pair<Long, ByteArray>>>()
+                    val jobs = mutableListOf<Deferred<Triple<Long, ByteArray, Int>>>()
 
                     while (true) {
 
@@ -217,10 +251,12 @@ class ContextCypherAlgorithm(
 
                         if (bytesRead < 8) chunk = paddingAdd(chunk)
 
+                        else chunk += ByteArray(8 - bytesRead) { 0 }
+
                         val job = async(dispatcher) {
 
                             val processed = enDeCryption(chunk, cipherOrDecipher, countForCTR_RandomDelta, randomDelta)
-                            pos to processed
+                            Triple(pos, processed, bytesRead)
 
                         }
 
@@ -232,15 +268,41 @@ class ContextCypherAlgorithm(
 
                     val results = jobs.awaitAll().sortedBy { it.first }
 
-                    for ((_, bytes) in results) {
+                    for ((_, bytes, originalSize) in results) {
 
-                        outChannel.write(ByteBuffer.wrap(bytes))
+                        if (originalSize < 8 && isStreamMode())
+                            outChannel.write(ByteBuffer.wrap(bytes, 0, originalSize))
+                        else
+                            outChannel.write(ByteBuffer.wrap(bytes))
 
                     }
 
                 }
 
             }
+
+        }
+
+        if (cipherOrDecipher == CipherOrDecipher.Decryption && !isStreamMode()) {
+
+            RandomAccessFile(output, "rw").use { raf ->
+                    if (raf.length() >= 0L) {
+                        // читаем весь файл
+                        val data = ByteArray(raf.length().toInt())
+                        raf.seek(0)
+                        raf.readFully(data)
+
+                        // вызываем removePadding, если паддинг не Zeros
+                        val dePadded = paddingRemove(data)
+
+                        // если длина изменилась — перезаписываем файл
+                        if (dePadded.size < data.size) {
+                            raf.setLength(0)
+                            raf.seek(0)
+                            raf.write(dePadded)
+                        }
+                    }
+                }
 
         }
 
@@ -274,8 +336,12 @@ class ContextCypherAlgorithm(
             Padding.Zeros -> block.dropLastWhile { it == 0.toByte() }.toByteArray()
             else -> {
 
-                val paddingLength = block.last().toInt()
-                block.dropLast(paddingLength).toByteArray()
+                val last = block.last().toInt() and 0xFF
+
+                if (last < 1 || last > 8) return block
+
+                if (last > block.size) return block
+                block.dropLast(last).toByteArray()
 
             }
 
@@ -291,18 +357,36 @@ class ContextCypherAlgorithm(
 
     }
 
-    private var cBlock = vectorInit
-    private var pBlock = ByteArray(8)
-    private var isFirst = true
-    private var shiftRegister = vectorInit
-    private var stream = vectorInit
+    private fun shiftRegisterAppend(old: ByteArray, tail: ByteArray): ByteArray {
+
+        val shift = tail.size
+        val out = ByteArray(8)
+
+        for (i in 0 until 8 - shift) out[i] = old[i + shift]
+
+        for (j in 0 until shift) out[8 - shift + j] = tail[j]
+
+        return out
+
+    }
 
     private suspend fun enDeCryption(
-        block: ByteArray,
+        _block: ByteArray,
         cipherOrDecipher: CipherOrDecipher,
         counterForCTR_RandomDelta: Long = 0,
         randomDelta: ByteArray = ByteArray(8)
     ): ByteArray {
+
+        val realSize = _block.size
+
+        val block = if (_block.size < 8) {
+
+            val padded = ByteArray(8)
+            for (i in _block.indices) padded[i] = _block[i]
+            padded
+
+        }
+        else _block
 
         val structureDeFeistel = objectCreating()
 
@@ -335,7 +419,7 @@ class ContextCypherAlgorithm(
 
                     val result = ByteArray(8) { i -> (outputBlock[i].toInt() xor cBlock[i].toInt()).toByte() }
 
-                    cBlock = outputBlock
+                    cBlock = block
 
                     result
 
@@ -380,12 +464,13 @@ class ContextCypherAlgorithm(
                 }
                 else {
 
-                    var newBlock = structureDeFeistel.decryptionAlgorithm(block)
+                    val newBlock = structureDeFeistel.decryptionAlgorithm(block)
 
                     if (isFirst) {
 
                         pBlock = ByteArray(8) { i -> (cBlock[i].toInt() xor newBlock[i].toInt()).toByte() }
                         cBlock = block
+                        isFirst = false
 
                     }
                     else {
@@ -402,37 +487,36 @@ class ContextCypherAlgorithm(
 
             EncryptionMode.CFB -> {
 
-                var enShiftRegister = ByteArray(8)
-                var result = ByteArray(8)
-
+                val enShiftRegister = structureDeFeistel.encryptionAlgorithm(shiftRegister)
                 if (cipherOrDecipher == CipherOrDecipher.Encryption) {
 
-                    enShiftRegister = structureDeFeistel.encryptionAlgorithm(shiftRegister)
-
-                    shiftRegister = ByteArray(8) { i ->
+                    val cipherBytes = ByteArray(realSize) { i ->
 
                         (block[i].toInt() xor enShiftRegister[i].toInt()).toByte()
 
                     }
 
-                    result = shiftRegister
+                    shiftRegister = if (realSize < 8) vectorInit.copyOf()
+                    else shiftRegisterAppend(shiftRegister, cipherBytes)
+
+                    cipherBytes
 
                 }
                 else {
 
-                    enShiftRegister = structureDeFeistel.encryptionAlgorithm(shiftRegister)
+                    val cipherInput = ByteArray(realSize) { i-> _block[i] }
+                    val plainBytes = ByteArray(realSize) { i ->
 
-                    result = ByteArray(8) { i ->
-
-                        (block[i].toInt() xor enShiftRegister[i].toInt()).toByte()
+                        (cipherInput[i].toInt() xor enShiftRegister[i].toInt()).toByte()
 
                     }
 
-                    shiftRegister = block
+                    shiftRegister = if (realSize < 8) vectorInit.copyOf()
+                    else shiftRegisterAppend(shiftRegister, cipherInput)
 
+                    plainBytes
                 }
 
-                result
             }
 
             EncryptionMode.OFB -> {
@@ -477,7 +561,7 @@ class ContextCypherAlgorithm(
 
                 val RD = randomDelta
 
-                for (i in 1 until 8) delta[i] = (localIV[i].toInt() xor (RD[i].toInt() * counterBytes[i].toInt())).toByte()
+                for (i in 0 until 8) delta[i] = (localIV[i].toInt() xor (RD[i].toInt() * counterBytes[i].toInt())).toByte()
 
                 val outputBlock = structureDeFeistel.encryptionAlgorithm(delta)
 
@@ -757,10 +841,10 @@ class FeistelStructure(
         39, 7, 47, 15, 55, 23, 63, 31,
         38, 6, 46, 14, 54, 22, 62, 30,
         37, 5, 45, 13, 53, 21, 61, 29,
-        36, 4, 44, 12, 51, 20, 60, 28,
-        35, 3, 43, 11, 50, 19, 59, 27,
-        34, 2, 42, 10, 49, 18, 58, 26,
-        33, 1, 41, 9, 48, 17, 57, 25
+        36, 4, 44, 12, 52, 20, 60, 28,
+        35, 3, 43, 11, 51, 19, 59, 27,
+        34, 2, 42, 10, 50, 18, 58, 26,
+        33, 1, 41, 9, 49, 17, 57, 25
 
     )
 
@@ -781,7 +865,7 @@ class FeistelStructure(
         setRoundKeys(entryKey)
 
         val initialBlock = bitSwap(enBlock, initialPermutation, endian, indexBase)
-        var cipheredBlock = enBlock
+        var cipheredBlock = initialBlock
 
         for (round in 1 .. 16) {
 
@@ -796,7 +880,9 @@ class FeistelStructure(
 
         }
 
-        return bitSwap(cipheredBlock, inverseInitialPermutation, endian, indexBase)
+        val swapped = cipheredBlock.copyOfRange(4, 8) + cipheredBlock.copyOfRange(0, 4)
+
+        return bitSwap(swapped, inverseInitialPermutation, endian, indexBase)
 
     }
 
@@ -805,7 +891,7 @@ class FeistelStructure(
         setRoundKeys(entryKey)
 
         val initialBlock = bitSwap(deBlock, initialPermutation, endian, indexBase)
-        var cipheredBlock = deBlock
+        var cipheredBlock = initialBlock
 
         for (round in 16 downTo 1) {
 
@@ -820,7 +906,9 @@ class FeistelStructure(
 
         }
 
-        return bitSwap(cipheredBlock, inverseInitialPermutation, endian, indexBase)
+        val swapped = cipheredBlock.copyOfRange(4, 8) + cipheredBlock.copyOfRange(0, 4)
+
+        return bitSwap(swapped, inverseInitialPermutation, endian, indexBase)
 
     }
 
@@ -834,18 +922,43 @@ class FeistelStructure(
 
 fun main() {
 
-    val obj = ContextCypherAlgorithm(
-        byteArrayOf(1,2,3,4,5,6,7,8),
-        EncryptionMode.ECB,
-        Padding.Zeros,
-        Endian.LTL_ENDIAN,
-        IndexBase.ONE_INDEX )
+    for (i in 1 .. 4) {
 
-    obj.cipherStart(
-        "C:\\Users\\Zaboev\\Desktop\\ExamplesForDES\\outText.txt",
-        "C:\\Users\\Zaboev\\Desktop\\ExamplesForDES\\decryptionText.txt",
-        CipherOrDecipher.Decryption,
-        5)
+        var padding: Padding = Padding.Zeros
+
+        when (i) {
+
+            1 -> padding = Padding.PKCS7
+            2 -> padding = Padding.ISO10126
+            3 -> padding = Padding.ANSI_X923
+            4 -> padding = Padding.Zeros
+
+        }
+
+        val obj = ContextCypherAlgorithm(
+            byteArrayOf(1, 2, 3, 4, 5, 6, 7, 8),
+            EncryptionMode.CFB, // ECB, CBC, PCBC, OFB, CFB, RandomDelta, CTR
+            padding,
+            Endian.BIG_ENDIAN,
+            IndexBase.ONE_INDEX,
+            byteArrayOf(8, 7, 6, 5, 4, 3, 2, 1),
+            byteArrayOf(2, 4, 6, 8, 1, 3, 5, 7)
+        )
+
+        obj.cipherStart(
+            "C:\\Users\\Zaboev\\Desktop\\ExamplesForDES\\text.txt",
+            "C:\\Users\\Zaboev\\Desktop\\ExamplesForDES\\cipheredWith${padding.toString()}.txt",
+            CipherOrDecipher.Encryption,
+            5
+        )
+
+        obj.cipherStart(
+            "C:\\Users\\Zaboev\\Desktop\\ExamplesForDES\\cipheredWith${padding.toString()}.txt",
+            "C:\\Users\\Zaboev\\Desktop\\ExamplesForDES\\deCipheredWith${padding.toString()}.txt",
+            CipherOrDecipher.Decryption,
+            5
+        )
+    }
 
     // private val encryptionKey: ByteArray,
     //    private val mode: EncryptionMode,
