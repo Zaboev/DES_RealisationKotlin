@@ -45,8 +45,24 @@ enum class CipherOrDecipher {
 enum class Algorithm {
 
     DES,
-    TripleDES,
     DEAL,
-    Rijndael
+    Rijndael,
+    TripleDes
+
+}
+
+enum class RijndaelBlockSize {
+
+    r128,
+    r192,
+    r256
+
+}
+
+enum class RijndaelKeySize {
+
+    rK128,
+    rK192,
+    rK256
 
 }

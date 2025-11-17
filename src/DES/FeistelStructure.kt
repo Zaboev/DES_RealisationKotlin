@@ -2,12 +2,12 @@ package DES
 import Enums.*
 
 class FeistelStructure(
-    private val objectRF: IRoundFunction,
-    private val keyGenerator: IRoundKeysGenerator,
+    private val objectRF: IRoundFunction<ByteArray>,
+    private val keyGenerator: IRoundKeysGenerator<ByteArray>,
     private val endian: Endian,
     private val indexBase: IndexBase,
     private val entryKey: ByteArray
-): IEncrDecr {
+): IEncrDecr<ByteArray> {
 
     private val initialPermutation = intArrayOf (
 

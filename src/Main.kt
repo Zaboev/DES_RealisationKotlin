@@ -17,8 +17,9 @@ fun main() {
             }
 
             val obj = ContextCypherAlgorithm(
+                Algorithm.DES,
                 byteArrayOf(1, 2, 3, 4, 5, 6, 7, 8),
-                EncryptionMode.OFB, // ECB, CBC, PCBC, OFB, CFB, RandomDelta, CTR
+                EncryptionMode.CTR, // ECB, CBC, PCBC, OFB, CFB, RandomDelta, CTR
                 padding,
                 Endian.BIG_ENDIAN,
                 IndexBase.ONE_INDEX,

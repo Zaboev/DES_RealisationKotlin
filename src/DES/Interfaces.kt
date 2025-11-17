@@ -1,23 +1,23 @@
 package DES
 
-interface IRoundKeysGenerator {
+interface IRoundKeysGenerator<T> {
 
-    suspend fun rKeysGenerator(entryKey: ByteArray): ArrayList<ByteArray>
-
-}
-
-interface IRoundFunction {
-
-    suspend fun encryptionTransformation(block: ByteArray, roundKey: ByteArray) : ByteArray
+    suspend fun rKeysGenerator(entryKey: T): ArrayList<ByteArray>
 
 }
 
-interface IEncrDecr {
+interface IRoundFunction<T> {
 
-    suspend fun encryptionAlgorithm(enBlock: ByteArray): ByteArray
+    suspend fun encryptionTransformation(block: T, roundKey: ByteArray) : T
 
-    suspend fun decryptionAlgorithm(deBlock: ByteArray): ByteArray
+}
 
-    suspend fun setRoundKeys(key: ByteArray)
+interface IEncrDecr<T> {
+
+    suspend fun encryptionAlgorithm(enBlock: T): T
+
+    suspend fun decryptionAlgorithm(deBlock: T): T
+
+    suspend fun setRoundKeys(key: T)
 
 }

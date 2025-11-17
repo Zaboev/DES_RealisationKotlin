@@ -1,7 +1,7 @@
 package DES
 import Enums.*
 
-class RoundFunction(private val endian: Endian, private val indexBase: IndexBase) : IRoundFunction {
+class RoundFunction(private val endian: Endian, private val indexBase: IndexBase) : IRoundFunction<ByteArray> {
 
     private val expansionPermutation: IntArray = intArrayOf (
         32, 1, 2, 3, 4, 5,

@@ -6,18 +6,61 @@ import java.util.concurrent.Executors
 import Enums.*
 import Padding.*
 
-class ContextCypherAlgorithm(
+class ContextCypherAlgorithm(private val _algorithm: Algorithm) {
 
-    private val encryptionKey: ByteArray,
-    private val mode: EncryptionMode,
-    private val paddingType: Padding,
-    private val endian: Endian,
-    private val indexBase: IndexBase,
-    private var randomDelta: ByteArray = byteArrayOf(0,0,0,0,0,0,0,0),
-    private var vectorInit: ByteArray = byteArrayOf(0,0,0,0,0,0,0,0),
-    private val desContext: DesContext = DesContext(encryptionKey, mode, endian, indexBase, randomDelta, vectorInit)
+    private val algorithm: Algorithm = _algorithm
 
-) {
+    private lateinit var encryptionKey: ByteArray
+    private lateinit var mode: EncryptionMode
+    private lateinit var paddingType: Padding
+    private lateinit var endian: Endian
+    private lateinit var indexBase: IndexBase
+    private var randomDelta: ByteArray = byteArrayOf(0,0,0,0,0,0,0,0) // Default
+    private var vectorInit: ByteArray = byteArrayOf(0,0,0,0,0,0,0,0) // Default
+    private var desContext: DesContext? = null
+
+    private val blockCipherSize = when (algorithm) {
+
+        Algorithm.DEAL -> 16
+        Algorithm.DES -> 8
+        Algorithm.TripleDes -> 8
+        Algorithm.Rijndael -> { 128 // Заглушка
+
+            /*when (blockSizeRijndael) {
+
+                RijndaelBlockSize.r128 -> 128
+                RijndaelBlockSize.r192 -> 192
+                RijndaelBlockSize.r256 -> 256*/
+
+            }
+
+        }
+
+    }
+
+    constructor (
+
+        _algorithm: Algorithm,
+        _encryptionKey: ByteArray,
+        _mode: EncryptionMode,
+        _paddingType: Padding,
+        _endian: Endian,
+        _indexBase: IndexBase,
+        _randomDelta: ByteArray = byteArrayOf(0,0,0,0,0,0,0,0),
+        _vectorInit: ByteArray = byteArrayOf(0,0,0,0,0,0,0,0),
+
+    ): this(_algorithm) {
+
+        encryptionKey = _encryptionKey
+        mode = _mode
+        paddingType = _paddingType
+        endian = _endian
+        indexBase = _indexBase
+        randomDelta = _randomDelta
+        vectorInit = _vectorInit
+        desContext = DesContext(encryptionKey, mode, endian, indexBase, randomDelta, vectorInit)
+
+    } // DES constructor
 
     fun cipherStart(input: String, output: String, cipherOrDecipher: CipherOrDecipher, threadCount: Int) = runBlocking {
 
@@ -39,14 +82,7 @@ class ContextCypherAlgorithm(
         cipherOrDecipher: CipherOrDecipher
     ) = withContext(dispatcher) {
 
-        desContext.isFirst = true
-        desContext.cBlock = vectorInit.copyOf()
-        desContext.pBlock = ByteArray(8)
-        desContext.shiftRegister = vectorInit.copyOf()
-        desContext.stream = vectorInit.copyOf()
-        desContext.countForCTR_RandomDelta = 0
-
-        val buffer = ByteArray(8)
+        val buffer = ByteArray(blockCipherSize)
 
         RandomAccessFile(input, "r").use { inFile ->
 
@@ -70,20 +106,20 @@ class ContextCypherAlgorithm(
 
                         var chunk = buffer.copyOf(bytesRead)
 
-                        if (bytesRead < 8 && (mode == EncryptionMode.CBC || mode == EncryptionMode.PCBC)) {
+                        if (bytesRead < blockCipherSize && (mode == EncryptionMode.CBC || mode == EncryptionMode.PCBC)) {
 
                             chunk = paddingAdd(chunk, paddingType)
-                            val processed = desContext.enDeCryption(chunk, cipherOrDecipher)
+                            val processed = desContext!!.enDeCryption(chunk, cipherOrDecipher)
                             outChannel.write(ByteBuffer.wrap(processed))
 
                         }
 
                         else {
 
-                            if (bytesRead < 8 && !desContext.isStreamMode()) chunk += ByteArray(8 - bytesRead) { 0 }
-                            val processed = desContext.enDeCryption(chunk, cipherOrDecipher)
+                            if (bytesRead < blockCipherSize && !desContext!!.isStreamMode()) chunk += ByteArray(blockCipherSize - bytesRead) { 0 }
+                            val processed = desContext!!.enDeCryption(chunk, cipherOrDecipher)
 
-                            if (desContext.isStreamMode()) outChannel.write(ByteBuffer.wrap(processed, 0, bytesRead))
+                            if (desContext!!.isStreamMode()) outChannel.write(ByteBuffer.wrap(processed, 0, bytesRead))
                             else outChannel.write(ByteBuffer.wrap(processed))
 
                         }
@@ -93,7 +129,7 @@ class ContextCypherAlgorithm(
 
                     }
 
-                    if (cipherOrDecipher == CipherOrDecipher.Decryption && desContext.isStreamMode()) outFile.setLength(totalBytesProcessed)
+                    if (cipherOrDecipher == CipherOrDecipher.Decryption && desContext!!.isStreamMode()) outFile.setLength(totalBytesProcessed)
 
 
                 }
@@ -109,18 +145,18 @@ class ContextCypherAlgorithm(
                         var chunk = buffer.copyOf(bytesRead)
                         val pos = position
 
-                        if (bytesRead < 8) chunk = paddingAdd(chunk, paddingType)
+                        if (bytesRead < blockCipherSize) chunk = paddingAdd(chunk, paddingType)
 
-                        else chunk += ByteArray(8 - bytesRead) { 0 }
+                        else chunk += ByteArray(blockCipherSize - bytesRead) { 0 }
 
                         val job = async(dispatcher) {
 
-                            val processed = desContext.enDeCryption(chunk, cipherOrDecipher, desContext.countForCTR_RandomDelta, randomDelta)
+                            val processed = desContext!!.enDeCryption(chunk, cipherOrDecipher, desContext!!.countForCTR_RandomDelta, randomDelta)
                             Triple(pos, processed, bytesRead)
 
                         }
 
-                        desContext.countForCTR_RandomDelta++
+                        desContext!!.countForCTR_RandomDelta++
                         jobs.add(job)
                         position += bytesRead
 
@@ -130,7 +166,7 @@ class ContextCypherAlgorithm(
 
                     for ((_, bytes, originalSize) in results) {
 
-                        if (originalSize < 8 && desContext.isStreamMode())
+                        if (originalSize < blockCipherSize && desContext!!.isStreamMode())
                             outChannel.write(ByteBuffer.wrap(bytes, 0, originalSize))
                         else
                             outChannel.write(ByteBuffer.wrap(bytes))
@@ -143,7 +179,7 @@ class ContextCypherAlgorithm(
 
         }
 
-        if (cipherOrDecipher == CipherOrDecipher.Decryption && !desContext.isStreamMode()) {
+        if (cipherOrDecipher == CipherOrDecipher.Decryption && !desContext!!.isStreamMode()) {
 
             RandomAccessFile(output, "rw").use { raf ->
                 if (raf.length() >= 0L) {
