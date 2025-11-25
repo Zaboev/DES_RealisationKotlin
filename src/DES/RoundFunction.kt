@@ -1,7 +1,9 @@
 package DES
 import Enums.*
 
-class RoundFunction(private val endian: Endian, private val indexBase: IndexBase) : IRoundFunction<ByteArray> {
+class RoundFunction(private val endian: Endian, private val indexBase: IndexBase) : IRoundFunction {
+
+    override var countForCTR_RandomDelta: Long = 0 // Заглушка, чтобы работал DEAL в режиме CTR
 
     private val expansionPermutation: IntArray = intArrayOf (
         32, 1, 2, 3, 4, 5,
@@ -65,7 +67,7 @@ class RoundFunction(private val endian: Endian, private val indexBase: IndexBase
             intArrayOf(2, 1, 14, 7, 4, 10, 8, 13, 15, 12, 9, 0, 3, 5, 6, 11)
         )
 
-    ) // Доспейсить
+    )
 
     private val transposition: IntArray = intArrayOf (
 

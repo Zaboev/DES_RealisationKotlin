@@ -6,17 +6,18 @@ interface IRoundKeysGenerator<T> {
 
 }
 
-interface IRoundFunction<T> {
+interface IRoundFunction {
 
-    suspend fun encryptionTransformation(block: T, roundKey: ByteArray) : T
+    var countForCTR_RandomDelta: Long
+    suspend fun encryptionTransformation(block: ByteArray, roundKey: ByteArray) : ByteArray
 
 }
 
 interface IEncrDecr<T> {
 
-    suspend fun encryptionAlgorithm(enBlock: T): T
+    suspend fun encryptionAlgorithm(enBlock: ByteArray): ByteArray
 
-    suspend fun decryptionAlgorithm(deBlock: T): T
+    suspend fun decryptionAlgorithm(deBlock: ByteArray): ByteArray
 
     suspend fun setRoundKeys(key: T)
 

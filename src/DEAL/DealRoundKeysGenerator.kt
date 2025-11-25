@@ -1,14 +1,11 @@
 package DEAL
 import DES.*
-import DesContext
 import Enums.*
 
 class DealRoundKeysGenerator (
-    private val keys: List<ByteArray>,
+    private val keys: ByteArray,
     private val keyLength: KeyLength,
-    private val desContext: DesContext,
-    private val counterForCTR_RandomDelta: Long = 0,
-    private val randomDelta: ByteArray = ByteArray(8)
+    private val desObject: FeistelStructure
 ) : IRoundKeysGenerator<ArrayList<ByteArray>> {
 
     private val roundKeys = ArrayList<ByteArray>()
@@ -24,25 +21,25 @@ class DealRoundKeysGenerator (
 
             KeyLength.k128 -> {
 
-                k1 = keys[0]
-                k2 = keys[1]
+                k1 = keys.copyOfRange(0, 8)
+                k2 = keys.copyOfRange(8, 16)
 
             }
 
             KeyLength.k192 -> {
 
-                k1 = keys[0]
-                k2 = keys[1]
-                k3 = keys[2]
+                k1 = keys.copyOfRange(0, 8)
+                k2 = keys.copyOfRange(8, 16)
+                k3 = keys.copyOfRange(16, 24)
 
             }
 
             KeyLength.k256 -> {
 
-                k1 = keys[0]
-                k2 = keys[1]
-                k3 = keys[2]
-                k4 = keys[3]
+                k1 = keys.copyOfRange(0, 8)
+                k2 = keys.copyOfRange(8, 16)
+                k3 = keys.copyOfRange(16, 24)
+                k4 = keys.copyOfRange(24, 32)
 
             }
 
@@ -51,7 +48,7 @@ class DealRoundKeysGenerator (
 
     }
 
-    suspend override fun rKeysGenerator(entryKey: ArrayList<ByteArray>): ArrayList<ByteArray> {
+    suspend override fun rKeysGenerator(entryKey: ArrayList<ByteArray>): ArrayList<ByteArray> { // Неиспользуемый entryKey
 
         initialization()
 
@@ -61,14 +58,14 @@ class DealRoundKeysGenerator (
 
             KeyLength.k128 -> {
 
-                roundKeys[0] = desContext.enDeCryption(encrKeys[0], CipherOrDecipher.Encryption, counterForCTR_RandomDelta, randomDelta)
+                roundKeys.add(desContext.enDeCryption(encrKeys[0], CipherOrDecipher.Encryption))
 
                 var xorResult = ByteArray(8) { i ->
 
                     ((encrKeys[1][i].toInt() xor roundKeys[0][i].toInt()).toByte())
 
                 }
-                roundKeys[1] = desContext.enDeCryption(xorResult, CipherOrDecipher.Encryption, counterForCTR_RandomDelta, randomDelta)
+                roundKeys.add(desContext.enDeCryption(xorResult, CipherOrDecipher.Encryption))
 
                 for (i in 2 .. 5) {
 
@@ -79,7 +76,7 @@ class DealRoundKeysGenerator (
                             ((encrKeys[0][j].toInt() xor roundKeys[i - 1][j].toInt() xor (i - 1)).toByte())
 
                         }
-                        roundKeys[i] = desContext.enDeCryption(xorResult, CipherOrDecipher.Encryption, counterForCTR_RandomDelta, randomDelta)
+                        roundKeys.add(desContext.enDeCryption(xorResult, CipherOrDecipher.Encryption))
 
                     }
                     else {
@@ -89,7 +86,7 @@ class DealRoundKeysGenerator (
                             ((encrKeys[1][j].toInt() xor roundKeys[i - 1][j].toInt() xor (i - 1)).toByte())
 
                         }
-                        roundKeys[i] = desContext.enDeCryption(xorResult, CipherOrDecipher.Encryption, counterForCTR_RandomDelta, randomDelta)
+                        roundKeys.add(desContext.enDeCryption(xorResult, CipherOrDecipher.Encryption))
 
                     }
 
@@ -99,7 +96,7 @@ class DealRoundKeysGenerator (
 
             KeyLength.k192 -> {
 
-                roundKeys[0] = desContext.enDeCryption(encrKeys[0], CipherOrDecipher.Encryption, counterForCTR_RandomDelta, randomDelta)
+                roundKeys.add(desContext.enDeCryption(encrKeys[0], CipherOrDecipher.Encryption))
 
                 var xorResult: ByteArray
 
@@ -110,7 +107,7 @@ class DealRoundKeysGenerator (
                         ((encrKeys[i][j].toInt() xor roundKeys[i - 1][j].toInt()).toByte())
 
                     }
-                    roundKeys[i] = desContext.enDeCryption(xorResult, CipherOrDecipher.Encryption, counterForCTR_RandomDelta, randomDelta)
+                    roundKeys.add(desContext.enDeCryption(xorResult, CipherOrDecipher.Encryption))
 
                 }
 
@@ -121,7 +118,7 @@ class DealRoundKeysGenerator (
                         ((encrKeys[i - 3][j].toInt() xor roundKeys[i - 1][j].toInt() xor (i - 2)).toByte())
 
                     }
-                    roundKeys[i] = desContext.enDeCryption(xorResult, CipherOrDecipher.Encryption, counterForCTR_RandomDelta, randomDelta)
+                    roundKeys.add(desContext.enDeCryption(xorResult, CipherOrDecipher.Encryption))
 
                 }
 
@@ -129,7 +126,7 @@ class DealRoundKeysGenerator (
 
             KeyLength.k256 -> {
 
-                roundKeys[0] = desContext.enDeCryption(encrKeys[0], CipherOrDecipher.Encryption, counterForCTR_RandomDelta, randomDelta)
+                roundKeys.add(desContext.enDeCryption(encrKeys[0], CipherOrDecipher.Encryption))
 
                 var xorResult: ByteArray
 
@@ -140,7 +137,7 @@ class DealRoundKeysGenerator (
                         ((encrKeys[i][j].toInt() xor roundKeys[i - 1][j].toInt()).toByte())
 
                     }
-                    roundKeys[i] = desContext.enDeCryption(xorResult, CipherOrDecipher.Encryption, counterForCTR_RandomDelta, randomDelta)
+                    roundKeys.add(desContext.enDeCryption(xorResult, CipherOrDecipher.Encryption))
 
                 }
 
@@ -151,7 +148,7 @@ class DealRoundKeysGenerator (
                         ((encrKeys[i - 4][j].toInt() xor roundKeys[i - 1][j].toInt() xor (i - 3)).toByte())
 
                     }
-                    roundKeys[i] = desContext.enDeCryption(xorResult, CipherOrDecipher.Encryption, counterForCTR_RandomDelta, randomDelta)
+                    roundKeys.add(desContext.enDeCryption(xorResult, CipherOrDecipher.Encryption))
 
                 }
 

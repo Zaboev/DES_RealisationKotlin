@@ -1,10 +1,10 @@
-import Enums.*
+/*import Enums.*
 import DES.*
 import Modes.Modes
 
 
-class DesContext(
-    private val encryptionKey: ByteArray,
+class DesContext (
+    var encryptionKey: ByteArray,
     private val mode: EncryptionMode,
     private val endian: Endian,
     private val indexBase: IndexBase,
@@ -29,8 +29,6 @@ class DesContext(
     suspend fun enDeCryption(
         _block: ByteArray,
         cipherOrDecipher: CipherOrDecipher,
-        counterForCTR_RandomDelta: Long = 0,
-        randomDelta: ByteArray = ByteArray(8)
     ): ByteArray {
         val realSize = _block.size
         val block = if (realSize < 8 && isStreamMode()) {
@@ -52,4 +50,4 @@ class DesContext(
         return modesObj.modes()
 
     }
-}
+}*/

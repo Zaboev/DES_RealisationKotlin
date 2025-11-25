@@ -2,9 +2,11 @@ package Padding
 import Enums.Padding
 import java.security.SecureRandom
 
-fun paddingAdd(block: ByteArray, paddingType: Padding): ByteArray {
+fun paddingAdd(block: ByteArray, paddingType: Padding, blockSize: Int): ByteArray {
 
-    val paddingLength = 8 - (block.size.takeIf { it != 0 } ?: 8)
+    if (blockSize == block.size) return block
+
+    val paddingLength = blockSize - (block.size.takeIf { it != 0 } ?: blockSize)
 
     return when (paddingType) {
 
@@ -23,7 +25,7 @@ fun paddingAdd(block: ByteArray, paddingType: Padding): ByteArray {
 
 }
 
-fun paddingRemove(block: ByteArray, paddingType: Padding): ByteArray {
+fun paddingRemove(block: ByteArray, paddingType: Padding, blockSize: Int): ByteArray {
 
     return when (paddingType) {
 
@@ -32,7 +34,7 @@ fun paddingRemove(block: ByteArray, paddingType: Padding): ByteArray {
 
             val last = block.last().toInt() and 0xFF
 
-            if (last < 1 || last > 8) return block
+            if (last < 1 || last > blockSize) return block
 
             if (last > block.size) return block
             block.dropLast(last).toByteArray()
