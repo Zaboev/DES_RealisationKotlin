@@ -1,8 +1,5 @@
 package DEAL
 import DES.*
-import DesContext
-import Enums.CipherOrDecipher
-import Enums.EncryptionMode
 import Enums.Endian
 import Enums.IndexBase
 

@@ -8,6 +8,7 @@ import java.io.RandomAccessFile
 import java.nio.ByteBuffer
 import java.util.concurrent.Executors
 import Enums.*
+import Modes.Modes
 import Padding.*
 
 class ContextCypherAlgorithm (
@@ -23,20 +24,28 @@ class ContextCypherAlgorithm (
 
 ) {
 
-    private var desObject: DesContext? = null
+    private var desObject: FeistelStructure? = null
     private var dealObject: DealEncryptionAndDecryption? = null
-    //private var tripleDesObject: TripleDesEncryptionAndDecryption? = null
+    private var tripleDesObject: TripleDesEncryptionAndDecryption? = null
     //private var rijndaelObject: RijndaelEncryptionAndDecryption? = null
 
     init {
 
         when (algorithm) {
 
-            Algorithm.DES -> desObject = DesContext(encryptionKey, mode, endian, indexBase, randomDelta, vectorInit)
+            Algorithm.DES -> {
+
+                val roundKeys = RoundKeysGenerator(endian, indexBase)
+                val roundFunction = RoundFunction(endian, indexBase)
+                desObject = FeistelStructure(roundFunction, roundKeys, endian, indexBase, encryptionKey)
+
+            }
             Algorithm.DEAL -> {
 
                 val fixedKey = "0123456789abcdef".chunked(2).map{ it.toInt(16).toByte() }.toByteArray()
-                val desObject = DesContext(fixedKey, mode, endian, indexBase, randomDelta, vectorInit)
+                val roundKeys = RoundKeysGenerator(endian, indexBase)
+                val roundFunction = RoundFunction(endian, indexBase)
+                val desObject = FeistelStructure(roundFunction, roundKeys, endian, indexBase, fixedKey)
                 val keyLength = when (encryptionKey.size) {
 
                     16 -> KeyLength.k128
@@ -47,13 +56,13 @@ class ContextCypherAlgorithm (
                 }
 
                 val dealRoundKeys = DealRoundKeysGenerator(encryptionKey, keyLength, desObject)
-                val dealRoundFunction = DealRoundFunction(mode, endian, indexBase, randomDelta, vectorInit)
+                val dealRoundFunction = DealRoundFunction(endian, indexBase)
                 dealObject = DealEncryptionAndDecryption(dealRoundFunction, dealRoundKeys, keyLength)
 
             }
             Algorithm.TripleDes -> {
 
-               /* val tripleDesMode = when (encryptionKey.size) {
+               val tripleDesMode = when (encryptionKey.size) {
 
                     8 -> TripleDesMode.oneKey
                     16 -> TripleDesMode.twoKeys
@@ -61,7 +70,8 @@ class ContextCypherAlgorithm (
                     else -> throw Exception("Invalid key length size, key should be 8 byte, 16 byte or 24 byte")
 
                 }
-                TripleDesEncryptionAndDecryption(encryptionKey, mode, paddingType, endian, indexBase, randomDelta, vectorInit, tripleDesMode)*/
+
+                tripleDesObject = TripleDesEncryptionAndDecryption(encryptionKey, endian, indexBase, tripleDesMode)
 
             }
 
@@ -82,7 +92,9 @@ class ContextCypherAlgorithm (
                 RijndaelBlockSize.r192 -> 192
                 RijndaelBlockSize.r256 -> 256*/
 
-            }
+        //Algorithm.IDEA -> 8
+
+    }
 
     private fun isStreamMode() =
         mode == EncryptionMode.CFB ||
@@ -90,20 +102,25 @@ class ContextCypherAlgorithm (
                 mode == EncryptionMode.CTR ||
                 mode == EncryptionMode.RandomDelta
 
-    private suspend fun sending(chunk: ByteArray, cipherOrDecipher: CipherOrDecipher): ByteArray {
+    private suspend fun sending(blockForCFB: ByteArray, cipherOrDecipher: CipherOrDecipher, countForCTR_RandomDelta: Long): ByteArray {
 
-        return when (algorithm) {
-
-            Algorithm.DES -> desObject!!.enDeCryption(chunk, cipherOrDecipher)
-            Algorithm.DEAL -> {
-
-                if (cipherOrDecipher == CipherOrDecipher.Encryption) dealObject!!.encryptionAlgorithm(chunk)
-                else dealObject!!.decryptionAlgorithm(chunk)
-
-            }
-            Algorithm.TripleDes -> chunk
-
+        val realSize = blockForCFB.size
+        val block = if (realSize < 8 && isStreamMode()) {
+            val full = ByteArray(8)
+            blockForCFB.copyInto(full)
+            full
         }
+        else if (realSize < 8 && !isStreamMode()) {
+            val padded = ByteArray(8)
+            blockForCFB.copyInto(padded)
+            padded
+        }
+        else blockForCFB
+
+        val modeObject = Modes(block, blockForCFB, realSize, algorithm, mode, cipherOrDecipher, vectorInit,
+            endian, randomDelta, countForCTR_RandomDelta, desObject, dealObject, tripleDesObject)
+
+        return modeObject.modes()
 
     }
 
@@ -127,102 +144,98 @@ class ContextCypherAlgorithm (
         cipherOrDecipher: CipherOrDecipher
     ) = withContext(dispatcher) {
 
-        val buffer = ByteArray(blockCipherSize)
+        try {
+            var countForCTR_RandomDelta: Long = 0L
+            val buffer = ByteArray(blockCipherSize)
 
-        RandomAccessFile(input, "r").use { inFile ->
+            RandomAccessFile(input, "r").use { inFile ->
 
-            RandomAccessFile(output, "rw").use { outFile ->
+                RandomAccessFile(output, "rw").use { outFile ->
 
-                outFile.setLength(0L)
+                    outFile.setLength(0L)
 
-                val inChannel = inFile.channel
-                val outChannel = outFile.channel
+                    val inChannel = inFile.channel
+                    val outChannel = outFile.channel
 
-                var totalBytesProcessed: Long = 0
+                    var totalBytesProcessed: Long = 0
 
-                var position = 0L
+                    var position = 0L
 
-                if (mode != EncryptionMode.ECB) {
+                    if (mode != EncryptionMode.ECB) {
 
-                    while (true) {
+                        while (true) {
 
-                        val bytesRead = inChannel.read(ByteBuffer.wrap(buffer))
-                        if (bytesRead == -1) break
+                            val bytesRead = inChannel.read(ByteBuffer.wrap(buffer))
+                            if (bytesRead == -1) break
 
-                        var chunk = buffer.copyOf(bytesRead)
+                            var chunk = buffer.copyOf(bytesRead)
 
-                        if (bytesRead < blockCipherSize && (mode == EncryptionMode.CBC || mode == EncryptionMode.PCBC)) {
+                            if (bytesRead < blockCipherSize && (mode == EncryptionMode.CBC || mode == EncryptionMode.PCBC)) {
 
-                            chunk = paddingAdd(chunk, paddingType)
-                            val processed = desObject!!.enDeCryption(chunk, cipherOrDecipher)
-                            outChannel.write(ByteBuffer.wrap(processed))
+                                chunk = paddingAdd(chunk, paddingType, blockCipherSize)
+                                val processed = sending(chunk, cipherOrDecipher, countForCTR_RandomDelta)
+                                outChannel.write(ByteBuffer.wrap(processed))
 
-                        }
+                            } else {
 
-                        else {
+                                if (bytesRead < blockCipherSize && !isStreamMode()) chunk += ByteArray(blockCipherSize - bytesRead) { 0 }
+                                val processed = sending(chunk, cipherOrDecipher, countForCTR_RandomDelta)
 
-                            if (bytesRead < blockCipherSize && !isStreamMode()) chunk += ByteArray(blockCipherSize - bytesRead) { 0 }
-                            val processed = desObject!!.enDeCryption(chunk, cipherOrDecipher)
+                                countForCTR_RandomDelta++
 
-                            when (algorithm) {
-
-                                Algorithm.DES -> desObject!!.countForCTR_RandomDelta++
-                                Algorithm.DEAL -> dealObject!!.roundFunction.countForCTR_RandomDelta++
-                                Algorithm.TripleDes -> 1//tripleDesObject!!.countForCTR_RandomDelta++
-                                //Algorithm.Rijndael ->
+                                if (isStreamMode()) outChannel.write(ByteBuffer.wrap(processed, 0, bytesRead))
+                                else outChannel.write(ByteBuffer.wrap(processed))
 
                             }
 
-                            if (isStreamMode()) outChannel.write(ByteBuffer.wrap(processed, 0, bytesRead))
-                            else outChannel.write(ByteBuffer.wrap(processed))
+                            position += bytesRead
+                            totalBytesProcessed += bytesRead
 
                         }
 
-                        position += bytesRead
-                        totalBytesProcessed += bytesRead
+                        if (cipherOrDecipher == CipherOrDecipher.Decryption && isStreamMode()) outFile.setLength(
+                            totalBytesProcessed
+                        )
+
 
                     }
+                    else {
 
-                    if (cipherOrDecipher == CipherOrDecipher.Decryption && isStreamMode()) outFile.setLength(totalBytesProcessed)
+                        val jobs = mutableListOf<Deferred<Triple<Long, ByteArray, Int>>>()
 
+                        while (true) {
 
-                }
-                else {
+                            val bytesRead = inChannel.read(ByteBuffer.wrap(buffer))
+                            if (bytesRead == -1) break
 
-                    val jobs = mutableListOf<Deferred<Triple<Long, ByteArray, Int>>>()
+                            var chunk = buffer.copyOf(bytesRead)
+                            val pos = position
 
-                    while (true) {
+                            if (bytesRead < blockCipherSize) chunk = paddingAdd(chunk, paddingType, blockCipherSize)
+                            else chunk += ByteArray(blockCipherSize - bytesRead) { 0 }
 
-                        val bytesRead = inChannel.read(ByteBuffer.wrap(buffer))
-                        if (bytesRead == -1) break
+                            val job = async(dispatcher) {
 
-                        var chunk = buffer.copyOf(bytesRead)
-                        val pos = position
+                                val processed = sending(chunk, cipherOrDecipher, countForCTR_RandomDelta)
+                                Triple(pos, processed, bytesRead)
 
-                        if (bytesRead < blockCipherSize) chunk = paddingAdd(chunk, paddingType)
+                            }
 
-                        else chunk += ByteArray(blockCipherSize - bytesRead) { 0 }
-
-                        val job = async(dispatcher) {
-
-                            val processed = desObject!!.enDeCryption(chunk, cipherOrDecipher, desObject!!.countForCTR_RandomDelta, randomDelta)
-                            Triple(pos, processed, bytesRead)
+                            jobs.add(job)
+                            position += bytesRead
 
                         }
 
-                        jobs.add(job)
-                        position += bytesRead
+                        val results = jobs.awaitAll().sortedBy { it.first }
 
-                    }
+                        for ((_, bytes, originalSize) in results) {
 
-                    val results = jobs.awaitAll().sortedBy { it.first }
+                            if (originalSize < blockCipherSize && isStreamMode())
+                                outChannel.write(ByteBuffer.wrap(bytes, 0, originalSize))
+                            else
+                                outChannel.write(ByteBuffer.wrap(bytes))
 
-                    for ((_, bytes, originalSize) in results) {
-
-                        if (originalSize < blockCipherSize && isStreamMode())
-                            outChannel.write(ByteBuffer.wrap(bytes, 0, originalSize))
-                        else
-                            outChannel.write(ByteBuffer.wrap(bytes))
+                        }
 
                     }
 
@@ -230,35 +243,33 @@ class ContextCypherAlgorithm (
 
             }
 
-        }
+            countForCTR_RandomDelta = 0L
 
-        when (algorithm) {
+            if (cipherOrDecipher == CipherOrDecipher.Decryption && !isStreamMode()) {
 
-            Algorithm.DES -> desObject!!.countForCTR_RandomDelta = 0L
-            Algorithm.DEAL -> dealObject!!.roundFunction.countForCTR_RandomDelta = 0L
-            Algorithm.TripleDes -> 1//tripleDesObject!!.countForCTR_RandomDelta = 0L
-            //Algorithm.Rijndael ->
-
-        }
-
-        if (cipherOrDecipher == CipherOrDecipher.Decryption && !isStreamMode()) {
-
-            RandomAccessFile(output, "rw").use { raf ->
-                if (raf.length() >= 0L) {
-                    val data = ByteArray(raf.length().toInt())
-                    raf.seek(0)
-                    raf.readFully(data)
-
-                    val dePadded = paddingRemove(data, paddingType)
-
-                    if (dePadded.size < data.size) {
-                        raf.setLength(0)
+                RandomAccessFile(output, "rw").use { raf ->
+                    if (raf.length() >= 0L) {
+                        val data = ByteArray(raf.length().toInt())
                         raf.seek(0)
-                        raf.write(dePadded)
+                        raf.readFully(data)
+
+                        val dePadded = paddingRemove(data, paddingType, blockCipherSize)
+
+                        if (dePadded.size < data.size) {
+                            raf.setLength(0)
+                            raf.seek(0)
+                            raf.write(dePadded)
+                        }
                     }
                 }
-            }
 
+            }
+        }
+        catch(e: Exception) {
+
+            e.printStackTrace()
+            e.stackTrace.forEach { println(it.toString()) }
+            throw e
         }
 
     }

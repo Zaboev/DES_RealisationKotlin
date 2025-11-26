@@ -2,6 +2,7 @@ package Modes
 import DEAL.DealEncryptionAndDecryption
 import DES.FeistelStructure
 import Enums.*
+import TripleDES.TripleDesEncryptionAndDecryption
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
@@ -16,10 +17,10 @@ class Modes (
     private var vectorInit: ByteArray,
     private val endian: Endian,
     private val randomDelta: ByteArray,
-    private var counterForCTR_RandomDelta: Long,
+    private var countForCTR_RandomDelta: Long,
     private val desObject: FeistelStructure?,
     private val dealObject: DealEncryptionAndDecryption?,
-    //private val tripleDesObject: TripleDesEncryptionAndDecryption?,
+    private val tripleDesObject: TripleDesEncryptionAndDecryption?,
     //private val rijndaelObject: RijndaelEncryptionAndDecryption?,
     //private val ideaObject: IdeaEncryptionAndDecryption?
 
@@ -54,7 +55,7 @@ class Modes (
 
             Algorithm.DES -> desObject!!.encryptionAlgorithm(block)
             Algorithm.DEAL -> dealObject!!.encryptionAlgorithm(block)
-            //Algorithm.TripleDes -> tripleDesObject!!.encryptionAlgorithm(block)
+            Algorithm.TripleDes -> tripleDesObject!!.encryptionAlgorithm(block)
             //Algorithm.Rijndael -> rijndaelObject!!.encryptionAlgorithm(block)
             //Algorithm.IDEA -> ideaObject!!.encryptionAlgorithm(block)
             else -> block
@@ -69,7 +70,7 @@ class Modes (
 
             Algorithm.DES -> desObject!!.decryptionAlgorithm(block)
             Algorithm.DEAL -> dealObject!!.decryptionAlgorithm(block)
-            //Algorithm.TripleDes -> tripleDesObject!!.decryptionAlgorithm(block)
+            Algorithm.TripleDes -> tripleDesObject!!.decryptionAlgorithm(block)
             //Algorithm.Rijndael -> rijndaelObject!!.decryptionAlgorithm(block)
             //Algorithm.IDEA -> ideaObject!!.decryptionAlgorithm(block)
             else -> block
@@ -174,7 +175,7 @@ class Modes (
                 val counterBytes = ByteBuffer
                     .allocate(blockFullSize)
                     .order(if (endian == Endian.BIG_ENDIAN) ByteOrder.BIG_ENDIAN else ByteOrder.LITTLE_ENDIAN)
-                    .putLong(counterForCTR_RandomDelta)
+                    .putLong(countForCTR_RandomDelta)
                     .array()
                 for (i in 0 until blockFullSize) counterBlock[i] = (counterBlock[i].toInt() xor counterBytes[i].toInt()).toByte()
                 val outputBlock = encryption(counterBlock)
@@ -187,7 +188,7 @@ class Modes (
                 val counterBytes = ByteBuffer
                     .allocate(blockFullSize)
                     .order(if (endian == Endian.BIG_ENDIAN) ByteOrder.BIG_ENDIAN else ByteOrder.LITTLE_ENDIAN)
-                    .putLong(counterForCTR_RandomDelta)
+                    .putLong(countForCTR_RandomDelta)
                     .array()
                 val RD = randomDelta
                 for (i in 0 until blockFullSize) delta[i] =

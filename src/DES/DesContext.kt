@@ -1,4 +1,4 @@
-import Enums.*
+/*import Enums.*
 import DES.*
 import Modes.Modes
 
@@ -52,4 +52,4 @@ class DesContext(
         return modesObj.modes()
 
     }
-}
+}*/
