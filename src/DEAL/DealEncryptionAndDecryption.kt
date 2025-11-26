@@ -2,30 +2,22 @@ package DEAL
 import DES.IEncrDecr
 import DES.IRoundFunction
 import DES.IRoundKeysGenerator
-import DesContext
-import Enums.EncryptionMode
-import Enums.Endian
-import Enums.IndexBase
 
-class DealEncryptionAndDecryption(
 
-    private val roundFunction: IRoundFunction<ArrayList<ByteArray>>,
+class DealEncryptionAndDecryption (
+
+    val roundFunction: IRoundFunction,
     private val roundKeyGenerator: IRoundKeysGenerator<ArrayList<ByteArray>>,
-    private val mode: EncryptionMode,
-    private val endian: Endian,
-    private val indexBase: IndexBase,
-    private val counterForCTR_RandomDelta: Long = 0,
-    private val randomDelta: ByteArray = ByteArray(8),
-    private var vectorInit: ByteArray,
     private val keyLength: KeyLength
 
 ) : IEncrDecr<ArrayList<ByteArray>> {
 
     private var roundKeys = ArrayList<ByteArray>()
 
-    override suspend fun encryptionAlgorithm(enBlock: ArrayList<ByteArray>): ArrayList<ByteArray> {
+    override suspend fun encryptionAlgorithm(enBlock: ByteArray): ByteArray {
 
-        var result: ArrayList<ByteArray>
+        var result: ByteArray
+        setRoundKeys(roundKeys) // roundKeys просто заглушка, функция не использует входные параметры, но в интерфейсе они нужны
 
         if (keyLength != KeyLength.k256) {
 
@@ -56,9 +48,10 @@ class DealEncryptionAndDecryption(
 
     }
 
-    override suspend fun decryptionAlgorithm(deBlock: ArrayList<ByteArray>): ArrayList<ByteArray> {
+    override suspend fun decryptionAlgorithm(deBlock: ByteArray): ByteArray {
 
-        var result: ArrayList<ByteArray>
+        var result: ByteArray
+        setRoundKeys(roundKeys)
 
         if (keyLength != KeyLength.k256) {
 
@@ -90,9 +83,6 @@ class DealEncryptionAndDecryption(
     }
 
     override suspend fun setRoundKeys(key: ArrayList<ByteArray>) {
-
-        val fixedKey = "0123456789abcdef".chunked(2).map{ it.toInt(16).toByte() }.toByteArray() //переместить
-        val desContext = DesContext(fixedKey, mode, endian, indexBase, randomDelta, vectorInit) // переместить
 
         roundKeys = roundKeyGenerator.rKeysGenerator(key)
 

@@ -46,8 +46,9 @@ enum class Algorithm {
 
     DES,
     DEAL,
-    Rijndael,
-    TripleDes
+    TripleDes,
+    //Rijndael,
+    //IDEA
 
 }
 

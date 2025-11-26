@@ -7,28 +7,28 @@ import Enums.Endian
 import Enums.IndexBase
 
 class DealRoundFunction (
-    private val mode: EncryptionMode,
     private val endian: Endian,
     private val indexBase: IndexBase,
-    private val counterForCTR_RandomDelta: Long = 0,
-    private val randomDelta: ByteArray = ByteArray(8),
-    private var vectorInit: ByteArray
-) : IRoundFunction<ArrayList<ByteArray>> {
+) : IRoundFunction {
 
-    override suspend fun encryptionTransformation(block: ArrayList<ByteArray>, roundKey: ByteArray): ArrayList<ByteArray> {
+    override suspend fun encryptionTransformation(block: ByteArray, roundKey: ByteArray): ByteArray {
 
-        val desContext = DesContext(roundKey, mode, endian, indexBase, randomDelta, vectorInit)
+        val roundKeys = RoundKeysGenerator(endian, indexBase)
+        val roundFunction = RoundFunction(endian, indexBase)
+        val desObject = FeistelStructure(roundFunction, roundKeys, endian, indexBase, roundKey)
 
-        var tempLeft = block[0]
-        var tempRight = desContext.enDeCryption(block[1], CipherOrDecipher.Encryption, counterForCTR_RandomDelta, randomDelta)
+        val tempLeft = ByteArray(8) { i -> block[i] }
+        val oldRight = ByteArray(8) { i -> block[i + 8] }
 
-        var rightBlock = ByteArray(8) { i ->
+        val tempRight = desObject.encryptionAlgorithm(oldRight)
+
+        val rightBlock = ByteArray(8) { i ->
 
             ((tempLeft[i].toInt() xor tempRight[i].toInt()).toByte())
 
         }
 
-        val result = arrayListOf(block[1], rightBlock)
+        val result = oldRight + rightBlock
 
         return result
 

@@ -1,4 +1,5 @@
 package Modes
+import DEAL.DealEncryptionAndDecryption
 import DES.FeistelStructure
 import Enums.*
 import java.nio.ByteBuffer
@@ -7,29 +8,81 @@ import java.nio.ByteOrder
 class Modes (
 
     private val block: ByteArray,
+    private val blockForCFB: ByteArray,
+    private val realSize: Int,
+    private val algorithm: Algorithm,
     private val mode: EncryptionMode,
     private val cipherOrDecipher: CipherOrDecipher,
-    private val structureDeFeistel: FeistelStructure,
     private var vectorInit: ByteArray,
-    private val realSize: Int,
     private val endian: Endian,
-    private val _block: ByteArray,
     private val randomDelta: ByteArray,
-    private var counterForCTR_RandomDelta: Long
+    private var counterForCTR_RandomDelta: Long,
+    private val desObject: FeistelStructure?,
+    private val dealObject: DealEncryptionAndDecryption?,
+    //private val tripleDesObject: TripleDesEncryptionAndDecryption?,
+    //private val rijndaelObject: RijndaelEncryptionAndDecryption?,
+    //private val ideaObject: IdeaEncryptionAndDecryption?
 
-) {
+    ) {
 
+    private val blockFullSize = when (algorithm) {
+
+        Algorithm.DES -> 8
+        Algorithm.DEAL -> 16
+        Algorithm.TripleDes -> 8
+        /*Algorithm.Rijndael -> {
+
+            when (blockSizeRijndael) {
+
+                RijndaelBlockSize.r128 -> 128
+                RijndaelBlockSize.r192 -> 192
+                RijndaelBlockSize.r256 -> 256
+
+            }*/
+        //Algorithm.IDEA -> 8
+
+    }
     private var cBlock = vectorInit.copyOf()
-    private var pBlock = ByteArray(8)
+    private var pBlock = ByteArray(blockFullSize)
     private var isFirst = true
     private var shiftRegister = vectorInit.copyOf()
     private var stream = vectorInit.copyOf()
 
+    private suspend fun encryption (block: ByteArray): ByteArray {
+
+        return when (algorithm) {
+
+            Algorithm.DES -> desObject!!.encryptionAlgorithm(block)
+            Algorithm.DEAL -> dealObject!!.encryptionAlgorithm(block)
+            //Algorithm.TripleDes -> tripleDesObject!!.encryptionAlgorithm(block)
+            //Algorithm.Rijndael -> rijndaelObject!!.encryptionAlgorithm(block)
+            //Algorithm.IDEA -> ideaObject!!.encryptionAlgorithm(block)
+            else -> block
+
+        }
+
+    }
+
+    private suspend fun decryption (block: ByteArray): ByteArray {
+
+        return when (algorithm) {
+
+            Algorithm.DES -> desObject!!.decryptionAlgorithm(block)
+            Algorithm.DEAL -> dealObject!!.decryptionAlgorithm(block)
+            //Algorithm.TripleDes -> tripleDesObject!!.decryptionAlgorithm(block)
+            //Algorithm.Rijndael -> rijndaelObject!!.decryptionAlgorithm(block)
+            //Algorithm.IDEA -> ideaObject!!.decryptionAlgorithm(block)
+            else -> block
+
+        }
+
+    }
+
     private fun shiftRegisterAppend(old: ByteArray, tail: ByteArray): ByteArray {
         val shift = tail.size
-        val out = ByteArray(8)
-        for (i in 0 until 8 - shift) out[i] = old[i + shift]
-        for (j in 0 until shift) out[8 - shift + j] = tail[j]
+        val out = ByteArray(blockFullSize)
+        for (i in 0 until blockFullSize - shift) out[i] = old[i + shift]
+        for (j in 0 until shift) out[blockFullSize - shift + j] = tail[j]
         return out
     }
 
@@ -37,20 +90,21 @@ class Modes (
 
         return when (mode) {
             EncryptionMode.ECB -> {
-                if (cipherOrDecipher == CipherOrDecipher.Encryption) structureDeFeistel.encryptionAlgorithm(block)
-                else structureDeFeistel.decryptionAlgorithm(block)
+                if (cipherOrDecipher == CipherOrDecipher.Encryption) encryption(block)
+                else decryption(block)
             }
 
             EncryptionMode.CBC -> {
                 if (cipherOrDecipher == CipherOrDecipher.Encryption) {
-                    val newBlock = ByteArray(8) { i ->
+                    val newBlock = ByteArray(blockFullSize) { i ->
                         (block[i].toInt() xor cBlock[i].toInt()).toByte()
                     }
-                    cBlock = structureDeFeistel.encryptionAlgorithm(newBlock)
+                    cBlock = encryption(newBlock)
                     cBlock
-                } else {
-                    val outputBlock = structureDeFeistel.decryptionAlgorithm(block)
-                    val result = ByteArray(8) { i -> (outputBlock[i].toInt() xor cBlock[i].toInt()).toByte() }
+                }
+                else {
+                    val outputBlock = decryption(block)
+                    val result = ByteArray(blockFullSize) { i -> (outputBlock[i].toInt() xor cBlock[i].toInt()).toByte() }
                     cBlock = block
                     result
                 }
@@ -58,30 +112,32 @@ class Modes (
 
             EncryptionMode.PCBC -> {
                 if (cipherOrDecipher == CipherOrDecipher.Encryption) {
-                    var newBlock = ByteArray(8)
+                    var newBlock = ByteArray(blockFullSize)
                     if (isFirst) {
                         pBlock = block
-                        newBlock = ByteArray(8) { i ->
+                        newBlock = ByteArray(blockFullSize) { i ->
                             (block[i].toInt() xor cBlock[i].toInt()).toByte()
                         }
                         isFirst = false
-                    } else {
-                        newBlock = ByteArray(8) { i ->
+                    }
+                    else {
+                        newBlock = ByteArray(blockFullSize) { i ->
                             (block[i].toInt() xor cBlock[i].toInt() xor pBlock[i].toInt()).toByte()
                         }
                         pBlock = block
                     }
-                    cBlock = structureDeFeistel.encryptionAlgorithm(newBlock)
+                    cBlock = encryption(newBlock)
                     cBlock
-                } else {
-                    val newBlock = structureDeFeistel.decryptionAlgorithm(block)
+                }
+                else {
+                    val newBlock = decryption(block)
                     if (isFirst) {
-                        pBlock = ByteArray(8) { i -> (cBlock[i].toInt() xor newBlock[i].toInt()).toByte() }
+                        pBlock = ByteArray(blockFullSize) { i -> (cBlock[i].toInt() xor newBlock[i].toInt()).toByte() }
                         cBlock = block
                         isFirst = false
                     } else {
                         pBlock =
-                            ByteArray(8) { i -> (newBlock[i].toInt() xor cBlock[i].toInt() xor pBlock[i].toInt()).toByte() }
+                            ByteArray(blockFullSize) { i -> (newBlock[i].toInt() xor cBlock[i].toInt() xor pBlock[i].toInt()).toByte() }
                         cBlock = block
                     }
                     pBlock
@@ -89,24 +145,25 @@ class Modes (
             }
 
             EncryptionMode.CFB -> {
-                val enShiftRegister = structureDeFeistel.encryptionAlgorithm(shiftRegister)
+                val enShiftRegister = encryption(shiftRegister)
                 if (cipherOrDecipher == CipherOrDecipher.Encryption) {
                     val cipherBytes = ByteArray(realSize) { i ->
-                        (_block[i].toInt() xor enShiftRegister[i].toInt()).toByte()
+                        (blockForCFB[i].toInt() xor enShiftRegister[i].toInt()).toByte()
                     }
                     shiftRegister = shiftRegisterAppend(shiftRegister, cipherBytes)
                     cipherBytes
-                } else {
+                }
+                else {
                     val plainBytes = ByteArray(realSize) { i ->
-                        (_block[i].toInt() xor enShiftRegister[i].toInt()).toByte()
+                        (blockForCFB[i].toInt() xor enShiftRegister[i].toInt()).toByte()
                     }
-                    shiftRegister = shiftRegisterAppend(shiftRegister, _block)
+                    shiftRegister = shiftRegisterAppend(shiftRegister, blockForCFB)
                     plainBytes
                 }
             }
 
             EncryptionMode.OFB -> {
-                stream = structureDeFeistel.encryptionAlgorithm(stream)
+                stream = encryption(stream)
                 ByteArray(realSize) { i ->
                     (block[i].toInt() xor stream[i].toInt()).toByte()
                 }
@@ -115,27 +172,27 @@ class Modes (
             EncryptionMode.CTR -> {
                 val counterBlock = shiftRegister.copyOf()
                 val counterBytes = ByteBuffer
-                    .allocate(8)
+                    .allocate(blockFullSize)
                     .order(if (endian == Endian.BIG_ENDIAN) ByteOrder.BIG_ENDIAN else ByteOrder.LITTLE_ENDIAN)
                     .putLong(counterForCTR_RandomDelta)
                     .array()
-                for (i in 0 until 8) counterBlock[i] = (counterBlock[i].toInt() xor counterBytes[i].toInt()).toByte()
-                val outputBlock = structureDeFeistel.encryptionAlgorithm(counterBlock)
+                for (i in 0 until blockFullSize) counterBlock[i] = (counterBlock[i].toInt() xor counterBytes[i].toInt()).toByte()
+                val outputBlock = encryption(counterBlock)
                 ByteArray(realSize) { i -> (block[i].toInt() xor outputBlock[i].toInt()).toByte() }
             }
 
             EncryptionMode.RandomDelta -> {
                 val localIV = shiftRegister.copyOf()
-                val delta = ByteArray(8)
+                val delta = ByteArray(blockFullSize)
                 val counterBytes = ByteBuffer
-                    .allocate(8)
+                    .allocate(blockFullSize)
                     .order(if (endian == Endian.BIG_ENDIAN) ByteOrder.BIG_ENDIAN else ByteOrder.LITTLE_ENDIAN)
                     .putLong(counterForCTR_RandomDelta)
                     .array()
                 val RD = randomDelta
-                for (i in 0 until 8) delta[i] =
+                for (i in 0 until blockFullSize) delta[i] =
                     (localIV[i].toInt() xor (RD[i].toInt() * counterBytes[i].toInt())).toByte()
-                val outputBlock = structureDeFeistel.encryptionAlgorithm(delta)
+                val outputBlock = encryption(delta)
                 ByteArray(realSize) { i -> (block[i].toInt() xor outputBlock[i].toInt()).toByte() }
             }
         }

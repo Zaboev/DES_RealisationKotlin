@@ -2,7 +2,7 @@ package DES
 import Enums.*
 
 class FeistelStructure(
-    private val objectRF: IRoundFunction<ByteArray>,
+    private val objectRF: IRoundFunction,
     private val keyGenerator: IRoundKeysGenerator<ByteArray>,
     private val endian: Endian,
     private val indexBase: IndexBase,
