@@ -8,24 +8,32 @@ class DealRoundFunction (
     private val indexBase: IndexBase,
 ) : IRoundFunction {
 
-    override suspend fun encryptionTransformation(block: ByteArray, roundKey: ByteArray): ByteArray {
+    private var desObject: FeistelStructure? = null
+
+    init {
 
         val roundKeys = RoundKeysGenerator(endian, indexBase)
         val roundFunction = RoundFunction(endian, indexBase)
-        val desObject = FeistelStructure(roundFunction, roundKeys, endian, indexBase, roundKey)
+        desObject = FeistelStructure(roundFunction, roundKeys, endian, indexBase, byteArrayOf(0, 0, 0, 0, 0, 0, 0, 0))
 
-        val tempLeft = ByteArray(8) { i -> block[i] }
-        val oldRight = ByteArray(8) { i -> block[i + 8] }
+    }
 
-        val tempRight = desObject.encryptionAlgorithm(oldRight)
+    override suspend fun encryptionTransformation(block: ByteArray, roundKey: ByteArray): ByteArray {
 
-        val rightBlock = ByteArray(8) { i ->
+        desObject!!.entryKey = roundKey
 
-            ((tempLeft[i].toInt() xor tempRight[i].toInt()).toByte())
+        val left = ByteArray(8) { i -> block[i] }
+        val right = ByteArray(8) { i -> block[i + 8] }
+
+        val fRight = desObject!!.encryptionAlgorithm(right)
+
+        val newRight = ByteArray(8) { i ->
+
+            ((left[i].toInt() xor fRight[i].toInt()).toByte())
 
         }
 
-        val result = oldRight + rightBlock
+        val result = right + newRight
 
         return result
 

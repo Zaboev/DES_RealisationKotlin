@@ -59,14 +59,14 @@ fun main() {
                 }
 
                 val obj = ContextCypherAlgorithm(
-                    Algorithm.TripleDes,
-                    byteArrayOf(1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8),
+                    Algorithm.DEAL,
+                    byteArrayOf(1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8),
                     mode,
                     padding,
                     Endian.BIG_ENDIAN,
                     IndexBase.ONE_INDEX,
-                    byteArrayOf(8, 7, 6, 5, 4, 3, 2, 1), // random delta
-                    byteArrayOf(2, 4, 6, 8, 1, 3, 5, 7) // vector init
+                    byteArrayOf(8, 7, 6, 5, 4, 3, 2, 1, 2, 4, 6, 8, 1, 3, 5, 7), // random delta
+                    byteArrayOf(2, 4, 6, 8, 1, 3, 5, 7, 2, 4, 6, 8, 1, 3, 5, 7) // vector init
                 )
 
                 obj.cipherStart(
