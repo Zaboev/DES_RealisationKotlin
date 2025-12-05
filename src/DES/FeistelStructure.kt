@@ -9,7 +9,7 @@ class FeistelStructure(
     private val indexBase: IndexBase,
     var entryKey: ByteArray
 
-): IEncrDecr<ByteArray> {
+): IEncryptionAndDecryption<ByteArray> {
 
     private val initialPermutation = intArrayOf (
 

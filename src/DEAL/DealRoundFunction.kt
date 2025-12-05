@@ -25,15 +25,40 @@ class DealRoundFunction (
         val left = ByteArray(8) { i -> block[i] }
         val right = ByteArray(8) { i -> block[i + 8] }
 
-        val fRight = desObject!!.encryptionAlgorithm(right)
+        val newLeft = left
+
+        val fLeft = desObject!!.encryptionAlgorithm(left)
 
         val newRight = ByteArray(8) { i ->
 
-            ((left[i].toInt() xor fRight[i].toInt()).toByte())
+            ((fLeft[i].toInt() xor right[i].toInt()).toByte())
 
         }
 
-        val result = right + newRight
+        val result = newRight + newLeft
+
+        return result
+
+    }
+
+    override suspend fun decryptionTransformation(block: ByteArray, roundKey: ByteArray) : ByteArray {
+
+        desObject!!.entryKey = roundKey
+
+        val left = ByteArray(8) { i -> block[i] }
+        val right = ByteArray(8) { i -> block[i + 8] }
+
+        val newLeft = left
+
+        val fLeft = desObject!!.decryptionAlgorithm(left)
+
+        val newRight = ByteArray(8) { i ->
+
+            ((fLeft[i].toInt() xor right[i].toInt()).toByte())
+
+        }
+
+        val result = newRight + newLeft
 
         return result
 

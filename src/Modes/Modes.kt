@@ -49,31 +49,31 @@ class Modes (
     private var shiftRegister = vectorInit.copyOf()
     private var stream = vectorInit.copyOf()
 
-    private suspend fun encryption (block: ByteArray): ByteArray {
+    private suspend fun encryption (_block: ByteArray): ByteArray {
 
         return when (algorithm) {
 
-            Algorithm.DES -> desObject!!.encryptionAlgorithm(block)
-            Algorithm.DEAL -> dealObject!!.encryptionAlgorithm(block)
-            Algorithm.TripleDes -> tripleDesObject!!.encryptionAlgorithm(block)
-            //Algorithm.Rijndael -> rijndaelObject!!.encryptionAlgorithm(block)
-            //Algorithm.IDEA -> ideaObject!!.encryptionAlgorithm(block)
-            else -> block
+            Algorithm.DES -> desObject!!.encryptionAlgorithm(_block)
+            Algorithm.DEAL -> dealObject!!.encryptionAlgorithm(_block)
+            Algorithm.TripleDes -> tripleDesObject!!.encryptionAlgorithm(_block)
+            //Algorithm.Rijndael -> rijndaelObject!!.encryptionAlgorithm(_block)
+            //Algorithm.IDEA -> ideaObject!!.encryptionAlgorithm(_block)
+            else -> _block
 
         }
 
     }
 
-    private suspend fun decryption (block: ByteArray): ByteArray {
+    private suspend fun decryption (_block: ByteArray): ByteArray {
 
         return when (algorithm) {
 
-            Algorithm.DES -> desObject!!.decryptionAlgorithm(block)
-            Algorithm.DEAL -> dealObject!!.decryptionAlgorithm(block)
-            Algorithm.TripleDes -> tripleDesObject!!.decryptionAlgorithm(block)
-            //Algorithm.Rijndael -> rijndaelObject!!.decryptionAlgorithm(block)
-            //Algorithm.IDEA -> ideaObject!!.decryptionAlgorithm(block)
-            else -> block
+            Algorithm.DES -> desObject!!.decryptionAlgorithm(_block)
+            Algorithm.DEAL -> dealObject!!.decryptionAlgorithm(_block)
+            Algorithm.TripleDes -> tripleDesObject!!.decryptionAlgorithm(_block)
+            //Algorithm.Rijndael -> rijndaelObject!!.decryptionAlgorithm(_block)
+            //Algorithm.IDEA -> ideaObject!!.decryptionAlgorithm(_block)
+            else -> _block
 
         }
 
@@ -91,6 +91,7 @@ class Modes (
 
         return when (mode) {
             EncryptionMode.ECB -> {
+
                 if (cipherOrDecipher == CipherOrDecipher.Encryption) encryption(block)
                 else decryption(block)
             }

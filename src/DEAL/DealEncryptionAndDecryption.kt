@@ -1,5 +1,5 @@
 package DEAL
-import DES.IEncrDecr
+import DES.IEncryptionAndDecryption
 import DES.IRoundFunction
 import DES.IRoundKeysGenerator
 
@@ -10,7 +10,7 @@ class DealEncryptionAndDecryption (
     private val roundKeyGenerator: IRoundKeysGenerator<ArrayList<ByteArray>>,
     private val keyLength: KeyLength
 
-) : IEncrDecr<ArrayList<ByteArray>> {
+) : IEncryptionAndDecryption<ArrayList<ByteArray>> {
 
     private var roundKeys = ArrayList<ByteArray>()
 
@@ -29,6 +29,10 @@ class DealEncryptionAndDecryption (
 
             }
 
+            val right = result.copyOfRange(0, 8)
+            val left = result.copyOfRange(8, 16)
+            result = left + right
+
             return result
 
         }
@@ -41,6 +45,10 @@ class DealEncryptionAndDecryption (
                 result = roundFunction.encryptionTransformation(result, roundKeys[i])
 
             }
+
+            val right = result.copyOfRange(0, 8)
+            val left = result.copyOfRange(8, 16)
+            result = left + right
 
             return result
 
@@ -63,6 +71,10 @@ class DealEncryptionAndDecryption (
 
             }
 
+            val right = result.copyOfRange(0, 8)
+            val left = result.copyOfRange(8, 16)
+            result = left + right
+
             return result
 
         }
@@ -75,6 +87,10 @@ class DealEncryptionAndDecryption (
                 result = roundFunction.encryptionTransformation(result, roundKeys[i])
 
             }
+
+            val right = result.copyOfRange(0, 8)
+            val left = result.copyOfRange(8, 16)
+            result = left + right
 
             return result
 

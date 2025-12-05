@@ -102,16 +102,16 @@ class ContextCypherAlgorithm (
                 mode == EncryptionMode.CTR ||
                 mode == EncryptionMode.RandomDelta
 
-    private suspend fun sending(blockForCFB: ByteArray, cipherOrDecipher: CipherOrDecipher, countForCTR_RandomDelta: Long): ByteArray {
+    private suspend fun sending(blockForCFB: ByteArray, cipherOrDecipher: CipherOrDecipher, countForCTR_RandomDelta: Long, blockCipherSize: Int): ByteArray {
 
         val realSize = blockForCFB.size
-        val block = if (realSize < 8 && isStreamMode()) {
-            val full = ByteArray(8)
+        val block = if (realSize < blockCipherSize && isStreamMode()) {
+            val full = ByteArray(blockCipherSize)
             blockForCFB.copyInto(full)
             full
         }
-        else if (realSize < 8 && !isStreamMode()) {
-            val padded = ByteArray(8)
+        else if (realSize < blockCipherSize && !isStreamMode()) {
+            val padded = ByteArray(blockCipherSize)
             blockForCFB.copyInto(padded)
             padded
         }
@@ -145,6 +145,7 @@ class ContextCypherAlgorithm (
     ) = withContext(dispatcher) {
 
         try {
+
             var countForCTR_RandomDelta: Long = 0L
             val buffer = ByteArray(blockCipherSize)
 
@@ -173,13 +174,14 @@ class ContextCypherAlgorithm (
                             if (bytesRead < blockCipherSize && (mode == EncryptionMode.CBC || mode == EncryptionMode.PCBC)) {
 
                                 chunk = paddingAdd(chunk, paddingType, blockCipherSize)
-                                val processed = sending(chunk, cipherOrDecipher, countForCTR_RandomDelta)
+
+                                val processed = sending(chunk, cipherOrDecipher, countForCTR_RandomDelta, blockCipherSize)
                                 outChannel.write(ByteBuffer.wrap(processed))
 
                             } else {
 
                                 if (bytesRead < blockCipherSize && !isStreamMode()) chunk += ByteArray(blockCipherSize - bytesRead) { 0 }
-                                val processed = sending(chunk, cipherOrDecipher, countForCTR_RandomDelta)
+                                val processed = sending(chunk, cipherOrDecipher, countForCTR_RandomDelta, blockCipherSize)
 
                                 countForCTR_RandomDelta++
 
@@ -216,7 +218,7 @@ class ContextCypherAlgorithm (
 
                             val job = async(dispatcher) {
 
-                                val processed = sending(chunk, cipherOrDecipher, countForCTR_RandomDelta)
+                                val processed = sending(chunk, cipherOrDecipher, countForCTR_RandomDelta, blockCipherSize)
                                 Triple(pos, processed, bytesRead)
 
                             }

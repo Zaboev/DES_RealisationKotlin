@@ -9,10 +9,11 @@ interface IRoundKeysGenerator<T> {
 interface IRoundFunction {
 
     suspend fun encryptionTransformation(block: ByteArray, roundKey: ByteArray) : ByteArray
+    suspend fun decryptionTransformation(block: ByteArray, roundKey: ByteArray) : ByteArray
 
 }
 
-interface IEncrDecr<T> {
+interface IEncryptionAndDecryption<T> {
 
     suspend fun encryptionAlgorithm(enBlock: ByteArray): ByteArray
 
