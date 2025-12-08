@@ -9,7 +9,21 @@ interface IRoundKeysGenerator<T> {
 interface IRoundFunction {
 
     suspend fun encryptionTransformation(block: ByteArray, roundKey: ByteArray) : ByteArray
-    suspend fun decryptionTransformation(block: ByteArray, roundKey: ByteArray) : ByteArray
+    suspend fun decryptionTransformation(block: ByteArray, roundKey: ByteArray): ByteArray {
+
+        return block
+
+    }
+    suspend fun lastEncryptionTransformation(block: ByteArray, roundKey: ByteArray) : ByteArray {
+
+        return block
+
+    }
+    suspend fun lastDecryptionTransformation(block: ByteArray, roundKey: ByteArray) : ByteArray {
+
+        return block
+
+    }
 
 }
 

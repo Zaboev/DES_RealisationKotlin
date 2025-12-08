@@ -5,6 +5,7 @@ import DEAL.*
 import DES.FeistelStructure
 import DES.RoundFunction
 import DES.RoundKeysGenerator
+import Rijndael.RijndaelBlockSize
 
 fun filesEqualFast(f1: File, f2: File): Boolean {
     if (f1.length() != f2.length()) return false
@@ -28,39 +29,6 @@ fun filesEqualFast(f1: File, f2: File): Boolean {
 
 
 suspend fun main() {
-
-    /*val fixedKey = "0123456789abcdef".chunked(2).map{ it.toInt(16).toByte() }.toByteArray()
-    val roundKeys = RoundKeysGenerator(Endian.BIG_ENDIAN, IndexBase.ONE_INDEX)
-    val roundFunction = RoundFunction(Endian.BIG_ENDIAN, IndexBase.ONE_INDEX)
-    val desObject = FeistelStructure(roundFunction, roundKeys, Endian.BIG_ENDIAN, IndexBase.ONE_INDEX, fixedKey)
-
-    val dealRoundKeys = DealRoundKeysGenerator(byteArrayOf(1, 2, 3, 4, 5, 6, 7, 8, 9, 1, 2, 3, 4, 5, 6, 7), KeyLength.k128, desObject)
-    val dealRoundFunction = DealRoundFunction(Endian.BIG_ENDIAN, IndexBase.ONE_INDEX)
-    val dealObject = DealEncryptionAndDecryption(dealRoundFunction, dealRoundKeys, KeyLength.k128)
-
-    try {
-        val decr = dealObject.encryptionAlgorithm(byteArrayOf(1, 3, 5, 7, 9, 1, 3, 5, 7, 9, 2, 4, 6, 8, 0, 52))
-
-
-        for (i in 0..15) {
-            print("${decr[i]} ")
-        }
-
-        val encr = dealObject.decryptionAlgorithm(decr)
-
-        println()
-
-        for (i in 0..15) {
-            print("${encr[i]} ")
-        }
-
-    }
-    catch (e: Exception) {
-
-        println(e.message)
-
-    }*/
-
 
     try {
 
@@ -96,14 +64,15 @@ suspend fun main() {
                 }
 
                 val obj = ContextCypherAlgorithm(
-                    Algorithm.TripleDes,
-                    byteArrayOf(1, 2, 3, 4, 5, 6, 7, 8),
+                    Algorithm.Rijndael,
+                    byteArrayOf(1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8),
                     mode,
                     padding,
                     Endian.BIG_ENDIAN,
                     IndexBase.ONE_INDEX,
-                    byteArrayOf(8, 7, 6, 5, 4, 3, 2, 1), // random delta
-                    byteArrayOf(2, 4, 6, 8, 1, 3, 5, 7) // vector init
+                    byteArrayOf(8, 7, 6, 5, 4, 3, 2, 1, 1, 2, 3, 4, 5, 6, 7, 8), // random delta
+                    byteArrayOf(2, 4, 6, 8, 1, 3, 5, 7, 1, 2, 3, 4, 5, 6, 7, 8), // vector init
+                    RijndaelBlockSize.r128
                 )
 
                 obj.cipherStart(

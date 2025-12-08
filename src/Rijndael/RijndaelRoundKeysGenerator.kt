@@ -5,32 +5,12 @@ import Enums.*
 class RijndaelRoundKeysGenerator(
 
     private val endian: Endian,
-    private val rijndaelKeySize: RijndaelKeySize,
-    private val rijndaelBlockSize: RijndaelBlockSize
+    private val rijndaelKeySize: Int,
+    private val rijndaelBlockSize: Int
 
 ): IRoundKeysGenerator<ByteArray> {
 
-    private val roundsCount = when (rijndaelKeySize) {
-
-        RijndaelKeySize.rK128 -> when (rijndaelBlockSize) {
-
-            RijndaelBlockSize.r128 -> 10
-            RijndaelBlockSize.r192 -> 12
-            RijndaelBlockSize.r256 -> 14
-
-        }
-        RijndaelKeySize.rK192 -> when (rijndaelBlockSize) {
-
-            RijndaelBlockSize.r128 -> 12
-            RijndaelBlockSize.r192 -> 12
-            RijndaelBlockSize.r256 -> 14
-
-        }
-        RijndaelKeySize.rK256 -> 14
-
-    }
-
-    private val subBytesObject = RijndaelSubBytes(endian)
+    suspend fun subBytesCreating(): RijndaelSubBytes = RijndaelSubBytes(endian)
 
     suspend fun rotWord(key: ByteArray): ByteArray {
 
@@ -40,6 +20,7 @@ class RijndaelRoundKeysGenerator(
 
     suspend fun subBytes(key: ByteArray): ByteArray {
 
+        val subBytesObject = subBytesCreating()
         return subBytesObject.subBytes(key)
 
     }
@@ -85,24 +66,57 @@ class RijndaelRoundKeysGenerator(
     override suspend fun rKeysGenerator(entryKey: ByteArray): ArrayList<ByteArray> {
 
         val result = ArrayList<ByteArray>()
+        val Nk = rijndaelKeySize / 4
+        val Nb = rijndaelBlockSize / 4
 
-        var rounds = 1
+        val roundsCount = maxOf(Nk, Nb) + 6
+        val totalWords = Nb * (roundsCount + 1)
 
-        while (rounds <= roundsCount) {
+        val words = ArrayList<ByteArray>()
+        for (i in 0 until Nk) {
 
-            var roundKey = ByteArray(0)
-
-            roundKey += xor(subBytes(rotWord(entryKey.copyOfRange(12, 16))), entryKey.copyOfRange(0, 4), rounds)
-            roundKey += xor(roundKey, entryKey.copyOfRange(4, 8))
-            roundKey += xor(roundKey.copyOfRange(4, 8), entryKey.copyOfRange(8, 12))
-            roundKey += xor(roundKey.copyOfRange(8, 12), entryKey.copyOfRange(12, 16))
-
-            result.add(roundKey)
-
-            rounds++
+            words.add(entryKey.copyOfRange(i * 4, (i + 1) * 4))
 
         }
 
+        var i = Nk
+
+        while (i < totalWords) {
+
+            var temp = words[i - 1].copyOf()
+
+            if (i % Nk == 0) {
+
+                temp = rotWord(temp)
+                temp = subBytes(temp)
+                temp = xor(temp, ByteArray(4){0}, i / Nk)
+
+            }
+            else if (Nk == 8 && i % Nk == 4) {
+
+                temp = subBytes(temp)
+
+            }
+
+            val newWord = xor(temp, words[i - Nk])
+            words.add(newWord)
+            i++
+
+        }
+
+        for (j in 0 .. roundsCount) {
+
+            val roundKey = ByteArray(Nb * 4)
+            for (k in 0 until Nb) {
+
+                val word = words[j * Nb + k]
+                System.arraycopy(word, 0, roundKey, k * 4, 4)
+
+            }
+
+            result.add(roundKey)
+
+        }
 
         return result
 

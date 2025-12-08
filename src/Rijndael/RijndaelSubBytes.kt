@@ -109,4 +109,5 @@ class RijndaelSubBytes(private val endian: Endian) {
         return out
 
     }
+
 }

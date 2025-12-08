@@ -67,6 +67,7 @@ class DealEncryptionAndDecryption (
 
             for (i in 4 downTo 0) {
 
+
                 result = roundFunction.encryptionTransformation(result, roundKeys[i])
 
             }

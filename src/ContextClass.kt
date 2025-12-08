@@ -20,14 +20,15 @@ class ContextCypherAlgorithm (
     private val endian: Endian,
     private val indexBase: IndexBase,
     private val randomDelta: ByteArray = byteArrayOf(0,0,0,0,0,0,0,0),
-    private val vectorInit: ByteArray = byteArrayOf(0,0,0,0,0,0,0,0)
+    private val vectorInit: ByteArray = byteArrayOf(0,0,0,0,0,0,0,0),
+    private val rijndaelBlockSize: RijndaelBlockSize = RijndaelBlockSize.r128
 
 ) {
 
     private var desObject: FeistelStructure? = null
     private var dealObject: DealEncryptionAndDecryption? = null
     private var tripleDesObject: TripleDesEncryptionAndDecryption? = null
-    //private var rijndaelObject: RijndaelEncryptionAndDecryption? = null
+    private var rijndaelObject: RijndaelEncryptionAndDecryption? = null
 
     init {
 
@@ -74,6 +75,27 @@ class ContextCypherAlgorithm (
                 tripleDesObject = TripleDesEncryptionAndDecryption(encryptionKey, endian, indexBase, tripleDesMode)
 
             }
+            Algorithm.Rijndael -> {
+
+                val keySize = if (encryptionKey.size == 16 || encryptionKey.size == 24 || encryptionKey.size == 32) encryptionKey.size
+                else throw Exception("Key size should be 16 || 24 || 32")
+
+                val blockSize = when (rijndaelBlockSize) {
+
+                    RijndaelBlockSize.r128 -> 16
+                    RijndaelBlockSize.r192 -> 24
+                    RijndaelBlockSize.r256 -> 32
+
+                }
+
+                val rijndaelRoundKeysGenerator = RijndaelRoundKeysGenerator(endian, keySize, blockSize)
+                val rijndaelRoundFunction = RijndaelRoundFunction(endian)
+
+                val roundCount = maxOf(keySize / 4, blockSize / 4) + 6
+
+                rijndaelObject = RijndaelEncryptionAndDecryption(rijndaelRoundFunction, rijndaelRoundKeysGenerator, encryptionKey, roundCount)
+
+            }
 
         }
 
@@ -84,13 +106,17 @@ class ContextCypherAlgorithm (
         Algorithm.DEAL -> 16
         Algorithm.DES -> 8
         Algorithm.TripleDes -> 8
-        /* Algorithm.Rijndael -> {
+        Algorithm.Rijndael -> {
 
-            when (blockSizeRijndael) {
+            when (rijndaelBlockSize) {
 
-                RijndaelBlockSize.r128 -> 128
-                RijndaelBlockSize.r192 -> 192
-                RijndaelBlockSize.r256 -> 256*/
+                RijndaelBlockSize.r128 -> 16
+                RijndaelBlockSize.r192 -> 24
+                RijndaelBlockSize.r256 -> 32
+
+            }
+
+        }
 
         //Algorithm.IDEA -> 8
 
@@ -118,7 +144,7 @@ class ContextCypherAlgorithm (
         else blockForCFB
 
         val modeObject = Modes(block, blockForCFB, realSize, algorithm, mode, cipherOrDecipher, vectorInit,
-            endian, randomDelta, countForCTR_RandomDelta, desObject, dealObject, tripleDesObject)
+            endian, randomDelta, countForCTR_RandomDelta, desObject, dealObject, tripleDesObject, rijndaelObject)
 
         return modeObject.modes()
 
@@ -277,3 +303,4 @@ class ContextCypherAlgorithm (
     }
 
 }
+

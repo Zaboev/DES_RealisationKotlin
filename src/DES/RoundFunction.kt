@@ -150,6 +150,4 @@ class RoundFunction(private val endian: Endian, private val indexBase: IndexBase
 
     }
 
-    override suspend fun decryptionTransformation(block: ByteArray, roundKey: ByteArray): ByteArray { return block } // Заглушка
-
 }

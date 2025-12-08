@@ -2,6 +2,7 @@ package Modes
 import DEAL.DealEncryptionAndDecryption
 import DES.FeistelStructure
 import Enums.*
+import Rijndael.RijndaelEncryptionAndDecryption
 import TripleDES.TripleDesEncryptionAndDecryption
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -21,7 +22,7 @@ class Modes (
     private val desObject: FeistelStructure?,
     private val dealObject: DealEncryptionAndDecryption?,
     private val tripleDesObject: TripleDesEncryptionAndDecryption?,
-    //private val rijndaelObject: RijndaelEncryptionAndDecryption?,
+    private val rijndaelObject: RijndaelEncryptionAndDecryption?,
     //private val ideaObject: IdeaEncryptionAndDecryption?
 
     ) {
@@ -31,15 +32,7 @@ class Modes (
         Algorithm.DES -> 8
         Algorithm.DEAL -> 16
         Algorithm.TripleDes -> 8
-        /*Algorithm.Rijndael -> {
-
-            when (blockSizeRijndael) {
-
-                RijndaelBlockSize.r128 -> 128
-                RijndaelBlockSize.r192 -> 192
-                RijndaelBlockSize.r256 -> 256
-
-            }*/
+        Algorithm.Rijndael -> vectorInit.size
         //Algorithm.IDEA -> 8
 
     }
@@ -56,7 +49,7 @@ class Modes (
             Algorithm.DES -> desObject!!.encryptionAlgorithm(_block)
             Algorithm.DEAL -> dealObject!!.encryptionAlgorithm(_block)
             Algorithm.TripleDes -> tripleDesObject!!.encryptionAlgorithm(_block)
-            //Algorithm.Rijndael -> rijndaelObject!!.encryptionAlgorithm(_block)
+            Algorithm.Rijndael -> rijndaelObject!!.encryptionAlgorithm(_block)
             //Algorithm.IDEA -> ideaObject!!.encryptionAlgorithm(_block)
             else -> _block
 
@@ -71,7 +64,7 @@ class Modes (
             Algorithm.DES -> desObject!!.decryptionAlgorithm(_block)
             Algorithm.DEAL -> dealObject!!.decryptionAlgorithm(_block)
             Algorithm.TripleDes -> tripleDesObject!!.decryptionAlgorithm(_block)
-            //Algorithm.Rijndael -> rijndaelObject!!.decryptionAlgorithm(_block)
+            Algorithm.Rijndael -> rijndaelObject!!.decryptionAlgorithm(_block)
             //Algorithm.IDEA -> ideaObject!!.decryptionAlgorithm(_block)
             else -> _block
 
