@@ -6,7 +6,7 @@ import java.io.*
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
-class ClassContext() {
+class Rc4ClassContext() {
 
     fun cipherDecipher(inputFile: File, outputFile: File, key: ByteArray, endian: ByteOrder = ByteOrder.BIG_ENDIAN) = runBlocking {
 
@@ -22,7 +22,7 @@ class ClassContext() {
 
     }
 
-    suspend fun rc4EncryptionStream(
+    suspend private fun rc4EncryptionStream(
 
         inputStream: InputStream,
         outputStream: OutputStream,

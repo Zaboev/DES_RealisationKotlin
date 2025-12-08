@@ -1,10 +1,5 @@
-import DEAL.KeyLength
 import Enums.*
 import java.io.File
-import DEAL.*
-import DES.FeistelStructure
-import DES.RoundFunction
-import DES.RoundKeysGenerator
 import Rijndael.RijndaelBlockSize
 
 fun filesEqualFast(f1: File, f2: File): Boolean {
@@ -28,7 +23,7 @@ fun filesEqualFast(f1: File, f2: File): Boolean {
 }
 
 
-suspend fun main() {
+fun main() {
 
     try {
 

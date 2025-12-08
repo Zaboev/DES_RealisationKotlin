@@ -13,30 +13,19 @@ class RijndaelEncryptionAndDecryption(
 ): IEncryptionAndDecryption<ByteArray> {
 
     private var roundKeys = ArrayList<ByteArray>()
-    private var isCycleBegun = false
 
     override suspend fun encryptionAlgorithm(enBlock: ByteArray): ByteArray {
 
         setRoundKeys(key)
 
         var temp = enBlock
-        if (!isCycleBegun) {
-
-            temp = ByteArray (temp.size) { i ->
-
-                (temp[i].toInt() xor roundKeys[0][i].toInt()).toByte()
-
-            }
-            isCycleBegun = true
-
-        }
+        temp = ByteArray (temp.size) { i -> (temp[i].toInt() xor roundKeys[0][i].toInt()).toByte() }
 
         for (i in 0 until roundCount - 1) {
 
             temp = roundFunction.encryptionTransformation(temp, roundKeys[i + 1])
 
         }
-        isCycleBegun = false
 
         return roundFunction.lastEncryptionTransformation(temp, roundKeys[roundCount])
 
@@ -47,23 +36,13 @@ class RijndaelEncryptionAndDecryption(
         setRoundKeys(key)
 
         var temp = deBlock
-        if (!isCycleBegun) {
-
-            temp = ByteArray (temp.size) { i ->
-
-                (temp[i].toInt() xor roundKeys[roundCount][i].toInt()).toByte()
-
-            }
-            isCycleBegun = true
-
-        }
+        temp = ByteArray (temp.size) { i -> (temp[i].toInt() xor roundKeys[roundCount][i].toInt()).toByte() }
 
         for (i in roundCount - 1 downTo 1) {
 
             temp = roundFunction.decryptionTransformation(temp, roundKeys[i])
 
         }
-        isCycleBegun = false
 
         return roundFunction.lastDecryptionTransformation(temp, roundKeys[0])
 
