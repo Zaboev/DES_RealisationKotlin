@@ -77,10 +77,11 @@ class IdeaRoundKeysGenerator : IRoundKeysGenerator<ByteArray, IntArray> {
             }
             return (1 - t1) and 0xFFFF
         }
+        fun addInv(x: Int): Int = (-x) and 0xFFFF
 
         var t1 = mulInv(EK[idx++])
-        var t2 = EK[idx++].inv() and 0xFFFF
-        var t3 = EK[idx++].inv() and 0xFFFF
+        var t2 = addInv(EK[idx++])
+        var t3 = addInv(EK[idx++])
 
         temp[--p] = mulInv(EK[idx++])
         temp[--p] = t3
@@ -93,8 +94,8 @@ class IdeaRoundKeysGenerator : IRoundKeysGenerator<ByteArray, IntArray> {
             temp[--p] = t1
 
             t1 = mulInv(EK[idx++])
-            t2 = EK[idx++].inv() and 0xFFFF
-            t3 = EK[idx++].inv() and 0xFFFF
+            t2 = addInv(EK[idx++])
+            t3 = addInv(EK[idx++])
 
             temp[--p] = mulInv(EK[idx++])
             temp[--p] = t2
@@ -107,8 +108,8 @@ class IdeaRoundKeysGenerator : IRoundKeysGenerator<ByteArray, IntArray> {
         temp[--p] = t1
 
         t1 = mulInv(EK[idx++])
-        t2 = EK[idx++].inv() and 0xFFFF
-        t3 = EK[idx++].inv() and 0xFFFF
+        t2 = addInv(EK[idx++])
+        t3 = addInv(EK[idx++])
 
         temp[--p] = mulInv(EK[idx])
         temp[--p] = t3
