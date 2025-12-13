@@ -8,24 +8,22 @@ class RijndaelRoundKeysGenerator(
     private val rijndaelKeySize: Int,
     private val rijndaelBlockSize: Int
 
-): IRoundKeysGenerator<ByteArray> {
+): IRoundKeysGenerator<ByteArray, ArrayList<ByteArray>> {
 
-    suspend fun subBytesCreating(): RijndaelSubBytes = RijndaelSubBytes(endian)
-
-    suspend fun rotWord(key: ByteArray): ByteArray {
+    fun rotWord(key: ByteArray): ByteArray {
 
         return byteArrayOf(key[1], key[2], key[3], key[0])
 
     }
 
-    suspend fun subBytes(key: ByteArray): ByteArray {
+    fun subBytes(key: ByteArray): ByteArray {
 
-        val subBytesObject = subBytesCreating()
+        val subBytesObject = RijndaelSubBytes(endian)
         return subBytesObject.subBytes(key)
 
     }
 
-    suspend fun computeRcon(n: Int): UByte {
+    fun computeRcon(n: Int): UByte {
 
         require (n >= 1)
 
@@ -45,7 +43,7 @@ class RijndaelRoundKeysGenerator(
 
     }
 
-    suspend fun xor(convertedKey: ByteArray, originalKey: ByteArray, numRound: Int = 0): ByteArray {
+    fun xor(convertedKey: ByteArray, originalKey: ByteArray, numRound: Int = 0): ByteArray {
 
         if (numRound == 0) return ByteArray(4) { i -> (convertedKey[i].toInt() xor originalKey[i].toInt()).toByte() }
         else {

@@ -1,14 +1,30 @@
 package DES
 
-interface IRoundKeysGenerator<T> {
+interface IRoundKeysGenerator<T, R> {
 
-    suspend fun rKeysGenerator(entryKey: T): ArrayList<ByteArray>
+    suspend fun rKeysGenerator(entryKey: T): R
+    suspend fun rKeysGeneratorDecryptionForIdea(entryKey: T): IntArray {
+
+        return intArrayOf(0)
+
+    }
+    suspend fun rKeysGeneratorForDecryption(entryKeys: ArrayList<ByteArray>): ArrayList<ByteArray> {
+
+        return entryKeys
+
+    }
+    /*suspend fun rKeysGenerator(entryKey: T): ArrayList<ByteArray>
+    suspend fun rKeysGeneratorForDecryption(entryKeys: ArrayList<ByteArray>): ArrayList<ByteArray> {
+
+        return entryKeys
+
+    }*/
 
 }
 
-interface IRoundFunction {
+interface IRoundFunction<T> {
 
-    suspend fun encryptionTransformation(block: ByteArray, roundKey: ByteArray) : ByteArray
+    suspend fun encryptionTransformation(block: ByteArray, roundKey: T) : ByteArray
     suspend fun decryptionTransformation(block: ByteArray, roundKey: ByteArray): ByteArray {
 
         return block

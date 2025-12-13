@@ -6,8 +6,8 @@ import DES.IRoundKeysGenerator
 
 class DealEncryptionAndDecryption (
 
-    val roundFunction: IRoundFunction,
-    private val roundKeyGenerator: IRoundKeysGenerator<ArrayList<ByteArray>>,
+    val roundFunction: IRoundFunction<ByteArray>,
+    private val roundKeyGenerator: IRoundKeysGenerator<ArrayList<ByteArray>, ArrayList<ByteArray>>,
     private val keyLength: KeyLength
 
 ) : IEncryptionAndDecryption<ArrayList<ByteArray>> {

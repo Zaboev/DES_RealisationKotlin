@@ -48,6 +48,6 @@ enum class Algorithm {
     DEAL,
     TripleDes,
     Rijndael,
-    //IDEA
+    IDEA
 
 }

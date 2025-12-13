@@ -6,21 +6,19 @@ class RijndaelRoundFunction (
 
     private val endian: Endian
 
-): IRoundFunction {
-
-    fun subBytesCreating(): RijndaelSubBytes = RijndaelSubBytes(endian)
-
-    fun iSubBytes(state: ByteArray): ByteArray {
-
-        val subBytesObject = subBytesCreating()
-        return subBytesObject.inverseSubBytes(state)
-
-    }
+): IRoundFunction<ByteArray> {
 
     fun subBytes(state: ByteArray): ByteArray {
 
-        val subBytesObject = subBytesCreating()
+        val subBytesObject = RijndaelSubBytes(endian)
         return subBytesObject.subBytes(state)
+
+    }
+
+    fun iSubBytes(state: ByteArray): ByteArray {
+
+        val subBytesObject = RijndaelSubBytes(endian)
+        return subBytesObject.inverseSubBytes(state)
 
     }
 
@@ -88,6 +86,36 @@ class RijndaelRoundFunction (
 
     }
 
+    fun mixColumns(state: ByteArray): ByteArray {
+
+        val mc = RijndaelMixColumns()
+        val result = ByteArray(state.size)
+
+        for (i in 0 until 4) {
+
+            val j = i * 4
+
+            val a0 = state[j]
+            val a1 = state[j + 1]
+            val a2 = state[j + 2]
+            val a3 = state[j + 3]
+
+            val r0 = (mc.multiply02(a0).toInt() xor mc.multiply03(a1).toInt() xor (a2.toInt() and 0xFF) xor (a3.toInt() and 0xFF)).toByte()
+            val r1 = ((a0.toInt() and 0xFF) xor mc.multiply02(a1).toInt() xor mc.multiply03(a2).toInt() xor (a3.toInt() and 0xFF)).toByte()
+            val r2 = ((a0.toInt() and 0xFF) xor (a1.toInt() and 0xFF) xor mc.multiply02(a2).toInt() xor mc.multiply03(a3).toInt()).toByte()
+            val r3 = (mc.multiply03(a0).toInt() xor (a1.toInt() and 0xFF) xor (a2.toInt() and 0xFF) xor mc.multiply02(a3).toInt()).toByte()
+
+            result[j] = r0
+            result[j + 1] = r1
+            result[j + 2] = r2
+            result[j + 3] = r3
+
+        }
+
+        return result
+
+    }
+
     fun iMixCoulumns(state: ByteArray): ByteArray {
 
         val mc = RijndaelMixColumns()
@@ -106,36 +134,6 @@ class RijndaelRoundFunction (
             val r1 = (mc.multiply09(a0).toInt() xor mc.multiply0E(a1).toInt() xor mc.multiply0B(a2).toInt() xor mc.multiply0D(a3).toInt()).toByte()
             val r2 = (mc.multiply0D(a0).toInt() xor mc.multiply09(a1).toInt() xor mc.multiply0E(a2).toInt() xor mc.multiply0B(a3).toInt()).toByte()
             val r3 = (mc.multiply0B(a0).toInt() xor mc.multiply0D(a1).toInt() xor mc.multiply09(a2).toInt() xor mc.multiply0E(a3).toInt()).toByte()
-
-            result[j] = r0
-            result[j + 1] = r1
-            result[j + 2] = r2
-            result[j + 3] = r3
-
-        }
-
-        return result
-
-    }
-
-    suspend fun mixColumns(state: ByteArray): ByteArray {
-
-        val mc = RijndaelMixColumns()
-        val result = ByteArray(state.size)
-
-        for (i in 0 until 4) {
-
-            val j = i * 4
-
-            val a0 = state[j]
-            val a1 = state[j + 1]
-            val a2 = state[j + 2]
-            val a3 = state[j + 3]
-
-            val r0 = (mc.multiply02(a0).toInt() xor mc.multiply03(a1).toInt() xor (a2.toInt() and 0xFF) xor (a3.toInt() and 0xFF)).toByte()
-            val r1 = ((a0.toInt() and 0xFF) xor mc.multiply02(a1).toInt() xor mc.multiply03(a2).toInt() xor (a3.toInt() and 0xFF)).toByte()
-            val r2 = ((a0.toInt() and 0xFF) xor (a1.toInt() and 0xFF) xor mc.multiply02(a2).toInt() xor mc.multiply03(a3).toInt()).toByte()
-            val r3 = (mc.multiply03(a0).toInt() xor (a1.toInt() and 0xFF) xor (a2.toInt() and 0xFF) xor mc.multiply02(a3).toInt()).toByte()
 
             result[j] = r0
             result[j + 1] = r1

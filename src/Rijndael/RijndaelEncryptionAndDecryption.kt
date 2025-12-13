@@ -5,8 +5,8 @@ import DES.IRoundKeysGenerator
 
 class RijndaelEncryptionAndDecryption(
 
-    private val roundFunction: IRoundFunction,
-    private val roundKeysGenerator: IRoundKeysGenerator<ByteArray>,
+    private val roundFunction: IRoundFunction<ByteArray>,
+    private val roundKeysGenerator: IRoundKeysGenerator<ByteArray, ArrayList<ByteArray>>,
     private val key: ByteArray,
     private val roundCount: Int
 

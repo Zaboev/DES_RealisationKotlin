@@ -2,6 +2,7 @@ package Modes
 import DEAL.DealEncryptionAndDecryption
 import DES.FeistelStructure
 import Enums.*
+import IdeaEncryptionAndDecryption
 import Rijndael.RijndaelEncryptionAndDecryption
 import TripleDES.TripleDesEncryptionAndDecryption
 import java.nio.ByteBuffer
@@ -23,7 +24,7 @@ class Modes (
     private val dealObject: DealEncryptionAndDecryption?,
     private val tripleDesObject: TripleDesEncryptionAndDecryption?,
     private val rijndaelObject: RijndaelEncryptionAndDecryption?,
-    //private val ideaObject: IdeaEncryptionAndDecryption?
+    private val ideaObject: IdeaEncryptionAndDecryption?
 
     ) {
 
@@ -33,7 +34,7 @@ class Modes (
         Algorithm.DEAL -> 16
         Algorithm.TripleDes -> 8
         Algorithm.Rijndael -> vectorInit.size
-        //Algorithm.IDEA -> 8
+        Algorithm.IDEA -> 8
 
     }
     private var cBlock = vectorInit.copyOf()
@@ -50,9 +51,7 @@ class Modes (
             Algorithm.DEAL -> dealObject!!.encryptionAlgorithm(_block)
             Algorithm.TripleDes -> tripleDesObject!!.encryptionAlgorithm(_block)
             Algorithm.Rijndael -> rijndaelObject!!.encryptionAlgorithm(_block)
-            //Algorithm.IDEA -> ideaObject!!.encryptionAlgorithm(_block)
-            else -> _block
-
+            Algorithm.IDEA -> ideaObject!!.encryptionAlgorithm(_block)
         }
 
     }
@@ -65,8 +64,7 @@ class Modes (
             Algorithm.DEAL -> dealObject!!.decryptionAlgorithm(_block)
             Algorithm.TripleDes -> tripleDesObject!!.decryptionAlgorithm(_block)
             Algorithm.Rijndael -> rijndaelObject!!.decryptionAlgorithm(_block)
-            //Algorithm.IDEA -> ideaObject!!.decryptionAlgorithm(_block)
-            else -> _block
+            Algorithm.IDEA -> ideaObject!!.decryptionAlgorithm(_block)
 
         }
 

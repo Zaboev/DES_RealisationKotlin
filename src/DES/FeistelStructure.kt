@@ -3,8 +3,8 @@ import Enums.*
 
 class FeistelStructure(
 
-    private val objectRF: IRoundFunction,
-    private val keyGenerator: IRoundKeysGenerator<ByteArray>,
+    private val objectRF: IRoundFunction<ByteArray>,
+    private val keyGenerator: IRoundKeysGenerator<ByteArray, ArrayList<ByteArray>>,
     private val endian: Endian,
     private val indexBase: IndexBase,
     var entryKey: ByteArray
@@ -39,7 +39,7 @@ class FeistelStructure(
 
     private var roundKeys = ArrayList<ByteArray>(16)
 
-    private suspend fun xor (left: ByteArray, keyedRight: ByteArray): ByteArray {
+    private fun xor (left: ByteArray, keyedRight: ByteArray): ByteArray {
 
         return ByteArray(4) {i ->
 

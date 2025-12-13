@@ -1,7 +1,7 @@
 package DES
 import Enums.*
 
-class RoundKeysGenerator(private val endian: Endian, private val indexBase: IndexBase): IRoundKeysGenerator<ByteArray> {
+class RoundKeysGenerator(private val endian: Endian, private val indexBase: IndexBase): IRoundKeysGenerator<ByteArray, ArrayList<ByteArray>> {
 
     override suspend fun rKeysGenerator(entryKey: ByteArray): ArrayList<ByteArray> {
 

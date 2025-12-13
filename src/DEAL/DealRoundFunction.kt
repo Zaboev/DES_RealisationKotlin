@@ -6,7 +6,7 @@ import Enums.IndexBase
 class DealRoundFunction (
     private val endian: Endian,
     private val indexBase: IndexBase,
-) : IRoundFunction {
+) : IRoundFunction<ByteArray> {
 
     private fun desInit(): FeistelStructure {
 

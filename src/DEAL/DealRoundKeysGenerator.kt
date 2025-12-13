@@ -6,7 +6,7 @@ class DealRoundKeysGenerator (
     private val keys: ByteArray,
     private val keyLength: KeyLength,
     private val desObject: FeistelStructure
-) : IRoundKeysGenerator<ArrayList<ByteArray>> {
+) : IRoundKeysGenerator<ArrayList<ByteArray>, ArrayList<ByteArray>> {
 
     private val roundKeys = ArrayList<ByteArray>()
 

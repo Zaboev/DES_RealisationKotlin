@@ -29,6 +29,7 @@ class ContextCypherAlgorithm (
     private var dealObject: DealEncryptionAndDecryption? = null
     private var tripleDesObject: TripleDesEncryptionAndDecryption? = null
     private var rijndaelObject: RijndaelEncryptionAndDecryption? = null
+    private var ideaObject: IdeaEncryptionAndDecryption? = null
 
     init {
 
@@ -96,6 +97,13 @@ class ContextCypherAlgorithm (
                 rijndaelObject = RijndaelEncryptionAndDecryption(rijndaelRoundFunction, rijndaelRoundKeysGenerator, encryptionKey, roundCount)
 
             }
+            Algorithm.IDEA -> {
+
+                val roundFunction = IdeaRoundFunction()
+                val roundKeysGenerator = IdeaRoundKeysGenerator()
+                ideaObject = IdeaEncryptionAndDecryption(roundKeysGenerator, roundFunction, encryptionKey)
+
+            }
 
         }
 
@@ -117,8 +125,7 @@ class ContextCypherAlgorithm (
             }
 
         }
-
-        //Algorithm.IDEA -> 8
+        Algorithm.IDEA -> 8
 
     }
 
@@ -144,7 +151,7 @@ class ContextCypherAlgorithm (
         else blockForCFB
 
         val modeObject = Modes(block, blockForCFB, realSize, algorithm, mode, cipherOrDecipher, vectorInit,
-            endian, randomDelta, countForCTR_RandomDelta, desObject, dealObject, tripleDesObject, rijndaelObject)
+            endian, randomDelta, countForCTR_RandomDelta, desObject, dealObject, tripleDesObject, rijndaelObject, ideaObject)
 
         return modeObject.modes()
 
