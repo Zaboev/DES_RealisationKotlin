@@ -7,11 +7,3 @@ enum class RijndaelBlockSize {
     r256
 
 }
-
-enum class RijndaelKeySize {
-
-    rK128,
-    rK192,
-    rK256
-
-}

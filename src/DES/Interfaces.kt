@@ -13,12 +13,6 @@ interface IRoundKeysGenerator<T, R> {
         return entryKeys
 
     }
-    /*suspend fun rKeysGenerator(entryKey: T): ArrayList<ByteArray>
-    suspend fun rKeysGeneratorForDecryption(entryKeys: ArrayList<ByteArray>): ArrayList<ByteArray> {
-
-        return entryKeys
-
-    }*/
 
 }
 

@@ -1,7 +1,7 @@
 package DES
 import Enums.*
 
-suspend fun bitSwap(block: ByteArray, ruleSwap: IntArray, endian: Endian, indexBase: IndexBase) : ByteArray {
+fun bitSwap(block: ByteArray, ruleSwap: IntArray, endian: Endian, indexBase: IndexBase) : ByteArray {
 
     val bitCount = ruleSwap.size
     val byteCount = (bitCount + 7) / 8

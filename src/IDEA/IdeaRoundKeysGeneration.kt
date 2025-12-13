@@ -2,16 +2,12 @@ import DES.*
 
 class IdeaRoundKeysGenerator : IRoundKeysGenerator<ByteArray, IntArray> {
 
-    companion object {
-
-        private const val IDEAROUNDS = 8
-        private const val IDEAKEYLEN = 6 * IDEAROUNDS + 4
-
-    }
+    private val ideaRounds = 8
+    private val ideaKeyLen = 6 * ideaRounds + 4
 
     override suspend fun rKeysGenerator(entryKey: ByteArray): IntArray {
 
-        val ek = IntArray(IDEAKEYLEN)
+        val ek = IntArray(ideaKeyLen)
         expandKey(entryKey, ek)
         return ek
 
@@ -19,8 +15,8 @@ class IdeaRoundKeysGenerator : IRoundKeysGenerator<ByteArray, IntArray> {
 
     override suspend fun rKeysGeneratorDecryptionForIdea(entryKey: ByteArray): IntArray {
 
-        val ek = IntArray(IDEAKEYLEN)
-        val dk = IntArray(IDEAKEYLEN)
+        val ek = IntArray(ideaKeyLen)
+        val dk = IntArray(ideaKeyLen)
         expandKey(entryKey, ek)
         invertKey(ek, dk)
         return dk
@@ -40,7 +36,7 @@ class IdeaRoundKeysGenerator : IRoundKeysGenerator<ByteArray, IntArray> {
         }
 
         var i = 0
-        while (j < IDEAKEYLEN) {
+        while (j < ideaKeyLen) {
             i++
             EK[i + 7] =
                 ((EK[i and 7] shl 9) or
@@ -56,8 +52,8 @@ class IdeaRoundKeysGenerator : IRoundKeysGenerator<ByteArray, IntArray> {
     }
 
     private fun invertKey(EK: IntArray, DK: IntArray) {
-        val temp = IntArray(IDEAKEYLEN)
-        var p = IDEAKEYLEN
+        val temp = IntArray(ideaKeyLen)
+        var p = ideaKeyLen
         var idx = 0
 
         fun mulInv(x: Int): Int {
@@ -88,7 +84,7 @@ class IdeaRoundKeysGenerator : IRoundKeysGenerator<ByteArray, IntArray> {
         temp[--p] = t2
         temp[--p] = t1
 
-        repeat(IDEAROUNDS - 1) {
+        repeat(ideaRounds - 1) {
             t1 = EK[idx++]
             temp[--p] = EK[idx++]
             temp[--p] = t1

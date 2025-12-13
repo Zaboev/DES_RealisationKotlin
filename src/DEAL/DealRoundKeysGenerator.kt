@@ -1,6 +1,5 @@
 package DEAL
 import DES.*
-import Enums.*
 
 class DealRoundKeysGenerator (
     private val keys: ByteArray,
